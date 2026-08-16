@@ -1,0 +1,35 @@
+================================================================
+  AURA  --  DAILY OPERATIONS REPORT
+  Sir Seewoosagur Ramgoolam International Airport (MRU / FIMP)
+  Plaisance, Mauritius
+================================================================
+  Report generated at simulation time 00:50 on 15/08/2026
+
+  MOVEMENTS
+    Departures scheduled .............. 36
+    Arrivals scheduled ............... 36
+    Movements delayed 15 min or more . 14
+    Cancelled ........................ 0
+    On-time performance .............. 80.6%
+
+  PASSENGERS
+    Total seats sold ................. 11375
+    Roster records held .............. 375
+
+  BAGGAGE
+    Bags in system ................... 379
+    Loaded to aircraft ............... 362
+    Flagged by screening ............. 38
+    Mishandled ....................... 0
+
+  AIRFIELD
+    Runway in use .................... 14
+    Wind ............................. 124/09kt
+    QNH .............................. 1018 hPa
+    Conditions ....................... Clear
+    Stands in the register ........... 24
+
+================================================================
+  Produced by AURA -- Airport Unified Resource Administration
+  Trois Freres Systems Ltd.
+================================================================

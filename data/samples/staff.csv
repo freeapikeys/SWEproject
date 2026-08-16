@@ -1,0 +1,31 @@
+name,role,shift,on_duty,station
+Vinod Ramdhany,Operations Officer,Early,1,2
+Yashna Gujadhur,Load Controller,Early,1,1
+Devina Gungapersad,Refuelling Operative,Early,1,4
+Yashna Laval,Apron Controller,Late,1,1
+Trisha Jhurry,Customer Service,Early,1,10
+Eshan Jhurry,Gate Agent,Night,0,12
+Estelle Rughoonundun,Refuelling Operative,Late,1,11
+Olivier Toolsee,Check-in Agent,Early,1,5
+Pravin Gujadhur,Apron Controller,Late,1,4
+Nadia Seetohul,Baggage Handler,Early,1,2
+Farhad Appadoo,Baggage Handler,Night,0,3
+Tania Narain,Load Controller,Late,1,12
+Thierry Dabee,Load Controller,Night,0,7
+Jessica Jugnauth,Baggage Handler,Late,1,3
+Fabrice Bhundoo,Baggage Reconciliation,Early,1,9
+Doorgesh Itoola,Duty Terminal Manager,Night,0,5
+Aditya Hurloll,Dispatcher,Early,1,8
+Emilie Adrien,Refuelling Operative,Early,1,11
+Wesley Dabee,Load Controller,Early,1,6
+Fabrice Sewnath,Gate Agent,Night,0,5
+Tania Gopaul,Apron Controller,Night,0,4
+Fabiola Bhundoo,Security Screener,Late,1,9
+Zaheer Sooprayen,Marshaller,Early,1,2
+Ismael Uteem,Load Controller,Late,1,10
+Yashna Vydelingum,Customer Service,Late,1,10
+Wesley Hurdoyal,Operations Officer,Late,1,11
+Loic Vydelingum,Duty Terminal Manager,Early,1,6
+Yashna Cangy,Apron Controller,Late,1,9
+Thierry Maunthrooa,Customer Service,Early,1,4
+Uma Imrith,Duty Terminal Manager,Early,1,6

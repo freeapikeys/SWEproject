@@ -1,0 +1,45 @@
+# ==========================================================================
+#  AURA -- .gitignore
+#
+#  Rule of thumb: anything the build produces, or anything specific to one
+#  developer's machine, stays out of the repository.  Only sources, headers,
+#  the build script and the documentation are tracked.
+# ==========================================================================
+
+# --- build output ---------------------------------------------------------
+*.exe
+*.o
+*.obj
+*.a
+*.lib
+*.dll
+*.pdb
+*.ilk
+*.res
+build/
+bin/
+
+# --- files the application writes at run time -----------------------------
+# The schema matters, the contents of one person's session do not.  A sample
+# set is committed under data/samples/ instead.
+data/*.csv
+data/*.log
+data/*.txt
+
+# --- editor and OS noise --------------------------------------------------
+.vscode/*
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/c_cpp_properties.json
+.idea/
+*.swp
+*~
+Thumbs.db
+desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# --- OneDrive / sync artefacts -------------------------------------------
+*.tmp
+*.laccdb
+~$*
