@@ -212,12 +212,21 @@ static void update_flight_counts(World *w, Flight *f, float dtMin)
  *  baggage flow
  * ========================================================================== */
 
+/*  Fractions of a lane travelled per minute.  These were tuned when the
+ *  clock ran at eight times real speed; against a real clock they left a bag
+ *  twenty minutes on the first belt alone, which reads as a stopped conveyor
+ *  rather than a working one.  Re-tuned to the real thing: a hold baggage
+ *  system moves a bag from check-in to the make-up carousel in twenty-five
+ *  to thirty minutes, and screening is the slow step because that is where
+ *  the queue forms.                                                        */
 static const float LANE_SPEED[BG_COUNT] = {
-    0.052f,  /* check-in belt  */
-    0.030f,  /* screening      */
-    0.045f,  /* sortation      */
-    0.038f,  /* make-up        */
-    0.f, 0.030f, 0.f, 0.f, 0.f
+    0.167f,  /* check-in belt   ~6 min */
+    0.125f,  /* screening       ~8 min */
+    0.200f,  /* sortation       ~5 min */
+    0.143f,  /* make-up         ~7 min */
+    0.f,
+    0.125f,  /* reclaim         ~8 min */
+    0.f, 0.f, 0.f
 };
 
 static void update_bags(World *w, float dtMin)
@@ -328,7 +337,12 @@ static void update_weather(World *w, float dtMin)
 
 static void update_incidents(World *w, float dtMin)
 {
-    if (rnd_f(&w->rng) > dtMin * 0.004f) return;
+    /*  Probability per minute.  At the old eight-times clock 0.004 produced
+     *  an entry every half hour of watching; against a real clock the same
+     *  figure would be one every four hours and the operations log would look
+     *  broken.  0.05 is about one entry every twenty minutes, which is what
+     *  a station this size actually generates.                             */
+    if (rnd_f(&w->rng) > dtMin * 0.05f) return;
     int which = rnd_int(&w->rng, 0, 5);
     switch (which) {
     case 0: {
@@ -372,28 +386,31 @@ static void update_incidents(World *w, float dtMin)
  *  tick
  * ========================================================================== */
 
-void sim_set_speed(World *w, float s)   { w->speed = s; }
-void sim_toggle_pause(World *w)         { w->paused = !w->paused; }
-
-void sim_jump_to(World *w, float minutes)
-{
-    w->clock = minutes;
-    while (w->clock >= 1440.f) w->clock -= 1440.f;
-    while (w->clock < 0.f)     w->clock += 1440.f;
-}
-
 void sim_tick(World *w, float dtSeconds)
 {
-    if (w->paused) dtSeconds = 0.f;
-    float dtMin = dtSeconds * w->speed / 60.f * 60.f;   /* speed = min/sec  */
-    dtMin = dtSeconds * w->speed;
+    float prev = w->clock;
+    world_sync_clock(w);
+    float dtMin = w->clock - prev;
 
-    w->clock += dtMin;
-    if (w->clock >= 1440.f) {
-        w->clock -= 1440.f;
-        w->day++;
-        world_log(w, LG_INFO, "Date rollover -- new operating day begins");
+    if (w->dayRolled) {
+        w->dayRolled = 0;
+        world_log(w, LG_INFO,
+                  "Date rollover -- %s %d %s is now the operating day",
+                  weekday_name(w->weekday), w->day, month_name(w->month));
+        world_generate_day(w, w->epochDay);
+        world_log(w, LG_OK, "%d movements published for today", w->nFlights);
+        sim_warm_baggage(w, 150.f);
+        dtMin = dtSeconds / 60.f;
     }
+
+    /*  The host clock is not monotonic: it steps at midnight, it steps when
+     *  the machine wakes from sleep, and it steps when the time service
+     *  corrects it.  Feeding a negative or a very large delta into the
+     *  rate-based models would run the belts backwards or jump every bag to
+     *  the end of its lane, so the step is clamped to something a frame
+     *  could plausibly have taken.                                         */
+    if (dtMin < 0.f)   dtMin = 0.f;
+    if (dtMin > 2.f)   dtMin = 2.f;
 
     for (int i = 0; i < w->nFlights; i++) {
         Flight *f = &w->flight[i];

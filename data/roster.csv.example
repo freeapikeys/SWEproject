@@ -1,0 +1,14 @@
+# AURA -- optional passenger roster
+#
+# One name per line.  "First Surname" or "Surname, First" both work.
+# Copy this file to  data/roster.csv  to use it.
+#
+# data/roster.csv is git-ignored on purpose: put real people's names here for
+# a demonstration and they stay on this machine, out of the repository.
+#
+Aditya Ramgoolam
+Bhavna Beeharry
+Clency Perrine
+Devina Sooprayen
+Hemant Gungapersad
+Jyoti Nagalingum

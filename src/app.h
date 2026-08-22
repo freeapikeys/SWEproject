@@ -16,16 +16,38 @@
 #include "core/model.h"
 #include "core/sim.h"
 #include "core/store.h"
+#include "core/auth.h"
+#include "core/queue.h"
+#include "core/ops.h"
+#include "core/incident.h"
+#include "core/feedback.h"
+#include "core/analytics.h"
 #include "ai/ai.h"
+#include "cv/vision.h"
 #include "../include/theme.h"
 
+/*  Fifteen screens is too many for a flat list, so the sidebar is grouped.
+ *  The order here is the order they appear, and NAV in main.c gives each one
+ *  its section heading.                                                    */
 enum {
-    SC_AIRFIELD = 0,
+    SC_WELCOME = 0,     /* passenger  */
     SC_BOARD,
+    SC_SERVICES,
+    SC_REVIEWS,
+
+    SC_OPS,             /* operations */
+    SC_AIRFIELD,
     SC_CHECKIN,
     SC_BAGGAGE,
     SC_FLOW,
-    SC_AI,
+
+    SC_EMERGENCY,       /* safety     */
+    SC_VISION,
+
+    SC_AI,              /* insight    */
+    SC_ANALYTICS,
+
+    SC_RESOURCES,       /* admin      */
     SC_RECORDS,
     SC_COUNT
 };
@@ -33,13 +55,34 @@ enum {
 /* AI suite sub-tabs */
 enum { AIT_ASSISTANT = 0, AIT_DELAY, AIT_BAGSCAN, AIT_STAND, AIT_FLOW, AIT_COUNT };
 
+/* Operations sub-tabs */
+enum { OPT_FLIGHTS = 0, OPT_GATES, OPT_RUNWAY, OPT_NEW, OPT_COUNT };
+
+/* Resources sub-tabs */
+enum { RST_AIRCRAFT = 0, RST_STAFF, RST_SHIFTS, RST_ASSIST, RST_LOST,
+       RST_COUNT };
+
 typedef struct {
     World        w;
+    AuthSystem   auth;
     ChatSession  chat;
     DelayModel   delay;
     BagNet      *bagnet;
     StandPlan    plan;
     FlowModel    flow;
+    VisionSystem vision;
+
+    /* operational subsystems */
+    EmergencyLog emg;
+    NotifyCentre notify;
+    ReviewBook   reviews;
+    LostBook     lost;
+    PaxQueue     qSecurity;
+    PaxQueue     qBoarding;
+    Report       report;
+    float        reportTimer;
+    float        queueTimer;
+    float        notifyTimer;
 
     Canvas       cv;
     Input        in;
@@ -57,6 +100,46 @@ typedef struct {
     int    selPax;
     int    selStand;
     int    inspectOpen;
+
+    /* the way in */
+    char   loginEmail[AUTH_EMAIL_MAX];
+    char   loginName [AUTH_NAME_MAX];
+    char   loginPw   [AUTH_PW_MAX];
+    char   loginPw2  [AUTH_PW_MAX];
+    int    loginKind;
+
+    /* the forward schedule browser */
+    int    boardMode;          /* 0 live board, 1 forward timetable         */
+    int    schedOffset;        /* days from today, 0 .. SCHEDULE_DAYS-1     */
+
+    /* operations */
+    int    opsTab;
+    char   opsSearch[64];
+    int    opsGateTarget;
+    char   nfNo[8];            /* the new-flight form                       */
+    char   nfTime[8];
+    int    nfAirline, nfType, nfDest, nfArrival;
+
+    /* emergency */
+    int    emgSel;
+    int    emgNewKind;
+
+    /* reviews */
+    int    rvService;
+    int    rvStars;
+    int    rvIndex;            /* carousel position                         */
+    int    rvShowAll;
+    char   rvText[REVIEW_TEXT];
+
+    /* resources */
+    int    resTab;
+    char   resSearch[64];
+    char   lpWhat[60];
+    char   lpWhere[40];
+
+    /* check-in */
+    char   ciName[38];
+    int    ciFlight;           /* flight id for the new passenger           */
 
     /* text buffers */
     char   chatInput[220];
@@ -80,6 +163,10 @@ typedef struct {
     /* flow */
     float  flowTimer;
 
+    /* surveillance overlays */
+    int    cvFocus;
+    int    cvIds, cvTrails, cvHeatmap, cvFlow, cvDets, cvTruth;
+
     /* misc */
     int    showHelp;
     float  bootT;
@@ -90,13 +177,22 @@ typedef struct {
 } App;
 
 /* screens ---------------------------------------------------------------- */
-void screen_airfield(App *a, float x, float y, float w, float h);
-void screen_board   (App *a, float x, float y, float w, float h);
-void screen_checkin (App *a, float x, float y, float w, float h);
-void screen_baggage (App *a, float x, float y, float w, float h);
-void screen_flow    (App *a, float x, float y, float w, float h);
-void screen_ai      (App *a, float x, float y, float w, float h);
-void screen_records (App *a, float x, float y, float w, float h);
+void screen_airfield (App *a, float x, float y, float w, float h);
+void screen_board    (App *a, float x, float y, float w, float h);
+void screen_checkin  (App *a, float x, float y, float w, float h);
+void screen_baggage  (App *a, float x, float y, float w, float h);
+void screen_flow     (App *a, float x, float y, float w, float h);
+void screen_vision   (App *a, float x, float y, float w, float h);
+void screen_ai       (App *a, float x, float y, float w, float h);
+void screen_records  (App *a, float x, float y, float w, float h);
+void screen_services (App *a, float x, float y, float w, float h);
+void screen_welcome  (App *a, float x, float y, float w, float h);
+void screen_ops      (App *a, float x, float y, float w, float h);
+void screen_emergency(App *a, float x, float y, float w, float h);
+void screen_analytics(App *a, float x, float y, float w, float h);
+void screen_reviews  (App *a, float x, float y, float w, float h);
+void screen_resources(App *a, float x, float y, float w, float h);
+void screen_login    (App *a, float sw, float sh);
 
 /* shared drawing helpers ------------------------------------------------- */
 void draw_aircraft (Canvas *c, float cx, float cy, float heading, float span,
@@ -110,5 +206,9 @@ void draw_chat_panel(App *a, float x, float y, float w, float h, int compact);
 void draw_flight_row(App *a, float x, float y, float w, float h, Flight *f,
                      int selected, int showRisk);
 const char *ordinal_gate(int gate, char *buf);
+
+/* shared by several screens: a row of stars, and a service rating pill */
+void draw_stars(Canvas *c, float x, float y, float size, float value,
+                int outOf, Color on, Color off);
 
 #endif /* AURA_APP_H */

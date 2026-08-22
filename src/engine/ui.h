@@ -38,6 +38,7 @@ Canvas *ui_canvas(void);
 Input  *ui_input (void);
 
 float *ui_state(uint64_t id, float initial);   /* persistent per-id storage  */
+int    ui_state_load(void);                    /* slots in use, for testing  */
 
 int   ui_hit    (float x, float y, float w, float h);   /* hover + enabled  */
 int   ui_clicked(float x, float y, float w, float h);
@@ -74,6 +75,9 @@ float ui_slider   (uint64_t id, float x,float y,float w, float v,
 int   ui_stepper  (uint64_t id, float x,float y,float w,float h, int *v,
                    int lo, int hi);
 int   ui_text_field(uint64_t id, float x,float y,float w,float h,
+                    char *buf, int cap, const char *placeholder, int icon);
+/* same field, drawn as discs -- for passwords */
+int   ui_secret_field(uint64_t id, float x,float y,float w,float h,
                     char *buf, int cap, const char *placeholder, int icon);
 int   ui_field_focused(uint64_t id);
 void  ui_focus    (uint64_t id);

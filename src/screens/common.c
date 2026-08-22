@@ -62,3 +62,30 @@ void draw_flight_row(App *a, float x, float y, float w, float h, Flight *f,
         if (f->stand >= 0) a->selStand = f->stand;
     }
 }
+
+/* --------------------------------------------------------------------------
+ *  A row of stars.
+ *
+ *  `value` is a rating, not a count, so 4.3 draws four filled stars and a
+ *  partial fifth -- clipping the fill rather than rounding is what makes an
+ *  average of 4.3 look different from one of 4.0.
+ * ------------------------------------------------------------------------- */
+void draw_stars(Canvas *c, float x, float y, float size, float value,
+                int outOf, Color on, Color off)
+{
+    float pitch = size * 1.22f;
+    for (int i = 0; i < outOf; i++) {
+        float cx = x + size*0.5f + i*pitch;
+        float fill = value - (float)i;
+        if (fill < 0.f) fill = 0.f;
+        if (fill > 1.f) fill = 1.f;
+
+        icon_draw(c, IC_STAR, cx, y + size*0.5f, size, off);
+        if (fill > 0.001f) {
+            /* clip to the filled fraction so a half star reads as a half */
+            cv_clip_push(c, cx - size*0.5f, y, size*fill + 0.5f, size);
+            icon_draw(c, IC_STAR, cx, y + size*0.5f, size, on);
+            cv_clip_pop(c);
+        }
+    }
+}

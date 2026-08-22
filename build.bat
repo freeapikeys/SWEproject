@@ -30,12 +30,22 @@ set SRC=src\main.c ^
  src\engine\canvas.c src\engine\text.c src\engine\anim.c ^
  src\engine\icons.c  src\engine\ui.c ^
  src\core\model.c    src\core\store.c  src\core\sim.c ^
+ src\core\auth.c    src\core\queue.c  src\core\ops.c ^
+ src\core\incident.c src\core\feedback.c src\core\analytics.c ^
  src\ai\ai_chat.c    src\ai\ai_delay.c src\ai\ai_bagscan.c ^
  src\ai\ai_stand.c   src\ai\ai_flow.c ^
+ src\cv\vision.c ^
  src\screens\common.c        src\screens\screen_airfield.c ^
  src\screens\screen_board.c  src\screens\screen_checkin.c ^
  src\screens\screen_baggage.c src\screens\screen_flow.c ^
- src\screens\screen_ai.c     src\screens\screen_records.c
+ src\screens\screen_ai.c     src\screens\screen_records.c ^
+ src\screens\screen_vision.c ^
+ src\screens\screen_services.c ^
+ src\screens\screen_welcome.c ^
+ src\screens\screen_login.c ^
+ src\screens\screen_ops.c   src\screens\screen_emergency.c ^
+ src\screens\screen_analytics.c src\screens\screen_reviews.c ^
+ src\screens\screen_resources.c
 
 echo.
 echo   Building AURA ...

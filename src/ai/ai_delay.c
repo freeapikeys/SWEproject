@@ -92,7 +92,7 @@ static void features_for(World *w, Flight *f, float *x)
  *  training set
  * ------------------------------------------------------------------------- */
 
-#define TRAIN_N 900
+#define TRAIN_N 2000
 
 static void make_training_set(float X[TRAIN_N][DELAY_FEATURES],
                               float y[TRAIN_N], uint32_t *rng)
@@ -131,7 +131,7 @@ void ai_delay_train(DelayModel *m, World *w)
     m->samples = TRAIN_N;
 
     const float lr = 0.55f;
-    const int   EPOCHS = 640;
+    const int   EPOCHS = 1100;
     float grad[DELAY_FEATURES];
 
     for (int ep = 0; ep < EPOCHS; ep++) {
@@ -150,7 +150,7 @@ void ai_delay_train(DelayModel *m, World *w)
         }
         float inv = 1.f / TRAIN_N;
         for (int k = 0; k < DELAY_FEATURES; k++)
-            m->w[k] -= lr * (grad[k]*inv + 0.0015f * m->w[k]);   /* L2 */
+            m->w[k] -= lr * (grad[k]*inv + 0.0006f * m->w[k]);   /* L2 */
         m->b -= lr * gb * inv;
 
         if ((ep % 10) == 0 && m->nCurve < 64)

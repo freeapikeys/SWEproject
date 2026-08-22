@@ -287,12 +287,14 @@ void store_journal(World *w, const char *what)
     char p[300]; path_of("journal.log", p, sizeof p);
     FILE *f = fopen(p, "ab");
     if (!f) return;
-    char hhmm[8]; fmt_hhmm((int)w->clock, hhmm);
-    time_t t = time(NULL);
-    struct tm *lt = localtime(&t);
-    fprintf(f, "[%04d-%02d-%02d %02d:%02d:%02d] SIM %s  %s\r\n",
-            lt->tm_year + 1900, lt->tm_mon + 1, lt->tm_mday,
-            lt->tm_hour, lt->tm_min, lt->tm_sec, hhmm, what);
+    /*  Stamped with airport time, taken from the world clock.  This line
+     *  used to carry the host's local time next to a separate "SIM" time;
+     *  now that the clock is real those are two names for the same instant,
+     *  except on a machine set to another zone, where the pair was actively
+     *  misleading.  One timestamp, and it says which zone it is in.       */
+    char hhmmss[12]; fmt_hhmmss(w->clock, hhmmss);
+    fprintf(f, "[%04d-%02d-%02d %s UTC+4] %s\r\n",
+            w->year, w->month, w->day, hhmmss, what);
     fclose(f);
 }
 

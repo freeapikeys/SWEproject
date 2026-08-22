@@ -1,10 +1,16 @@
 /* ==========================================================================
  *  AURA :: sim.h  --  the live airport
  *
- *  One call, sim_tick(), advances the whole operation: the clock, every
- *  flight's state machine, aircraft rolling along real taxi routings, the
- *  baggage system, the check-in hall and the weather over Plaisance.
- *  Nothing on screen is scripted -- the screens read this state and draw it.
+ *  One call, sim_tick(), advances the whole operation: every flight's state
+ *  machine, aircraft rolling along real taxi routings, the baggage system,
+ *  the check-in hall and the weather over Plaisance.  Nothing on screen is
+ *  scripted -- the screens read this state and draw it.
+ *
+ *  The clock is not ours to advance.  sim_tick() reads the host clock through
+ *  world_sync_clock() and everything else follows it, so the operation runs
+ *  at exactly the rate the airport does.  There is no speed control and no
+ *  pause, deliberately: both would make the display a simulation of the
+ *  airport rather than a view of it.
  * ========================================================================== */
 #ifndef AURA_SIM_H
 #define AURA_SIM_H
@@ -12,9 +18,6 @@
 #include "model.h"
 
 void  sim_tick(World *w, float dtSeconds);
-void  sim_set_speed(World *w, float speed);
-void  sim_toggle_pause(World *w);
-void  sim_jump_to(World *w, float minutes);
 void  sim_warm_baggage(World *w, float minutes);
 
 /* sample a taxi routing: position plus heading at arc-length fraction t */

@@ -111,6 +111,7 @@ typedef struct {
 
     /* rasteriser scratch */
     float   *cov;                            /* w floats of coverage        */
+    uint32_t *grad;                          /* w colours, gradient scratch */
     float   *xs;                             /* crossings                   */
     int     *dirs;
 } Canvas;

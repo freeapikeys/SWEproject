@@ -21,6 +21,24 @@ static FontSlot g_fonts[FONT_CACHE];
 static int      g_nfonts = 0;
 static Color    g_backdrop = 0xFFFFFFFF;
 
+/* Selecting a font and setting a colour are the expensive part of drawing one
+ * short string, and the interface draws the same font and colour many times in
+ * a row -- the split-flap board alone puts about eight hundred single glyphs on
+ * screen every frame.  Remembering what the device context already holds turns
+ * most of those calls into nothing. */
+static HFONT    g_curFont;
+static COLORREF g_curCol = 0xFFFFFFFF;
+static HDC      g_curDC;
+
+static void dc_forget(void)
+{
+    if (g_curDC && g_curFont)
+        SelectObject(g_curDC, GetStockObject(SYSTEM_FONT));
+    g_curFont = NULL;
+    g_curDC   = NULL;
+    g_curCol  = 0xFFFFFFFF;
+}
+
 static const wchar_t *g_family[TF_COUNT] = {
     L"Segoe UI",
     L"Bahnschrift",          /* condensed technical face; falls back nicely */
@@ -35,6 +53,7 @@ void tx_init(void)
 
 void tx_shutdown(void)
 {
+    dc_forget();
     for (int i = 0; i < g_nfonts; i++)
         if (g_fonts[i].used && g_fonts[i].h) DeleteObject(g_fonts[i].h);
     g_nfonts = 0;
@@ -66,7 +85,10 @@ static FontSlot *font_slot(Canvas *c, Font f)
     }
     if (g_nfonts >= FONT_CACHE) g_nfonts = 0;      /* crude recycle          */
     FontSlot *s = &g_fonts[g_nfonts++];
-    if (s->used && s->h) DeleteObject(s->h);
+    if (s->used && s->h) {
+        if (s->h == g_curFont) dc_forget();        /* never delete a live one */
+        DeleteObject(s->h);
+    }
 
     LOGFONTW lf;
     memset(&lf, 0, sizeof lf);
@@ -85,13 +107,14 @@ static FontSlot *font_slot(Canvas *c, Font f)
     s->key  = f;
     s->used = 1;
 
-    HGDIOBJ old = SelectObject(c->hdc, s->h);
+    SelectObject(c->hdc, s->h);
     TEXTMETRICW tm;
     GetTextMetricsW(c->hdc, &tm);
     s->ascent  = tm.tmAscent;
     s->descent = tm.tmDescent;
     s->height  = tm.tmHeight;
-    SelectObject(c->hdc, old);
+    g_curFont = s->h;                 /* it is selected now; record that */
+    g_curDC   = c->hdc;
     return s;
 }
 
@@ -118,12 +141,14 @@ int tx_width(Canvas *c, const char *utf8, Font f)
     int n = to_wide(utf8, wb, WBUF);
     if (!n) return 0;
     FontSlot *s = font_slot(c, f);
-    HGDIOBJ old = SelectObject(c->hdc, s->h);
-    SetTextCharacterExtra(c->hdc, f.tracking);
+    if (s->h != g_curFont || c->hdc != g_curDC) {
+        SelectObject(c->hdc, s->h);
+        g_curFont = s->h; g_curDC = c->hdc;
+    }
+    if (f.tracking) SetTextCharacterExtra(c->hdc, f.tracking);
     SIZE sz;
     GetTextExtentPoint32W(c->hdc, wb, n, &sz);
-    SetTextCharacterExtra(c->hdc, 0);
-    SelectObject(c->hdc, old);
+    if (f.tracking) SetTextCharacterExtra(c->hdc, 0);
     return sz.cx;
 }
 
@@ -146,24 +171,32 @@ void tx_draw_a(Canvas *c, const char *utf8, float x, float y,
     if (!n) return;
 
     FontSlot *s = font_slot(c, f);
-    HGDIOBJ old = SelectObject(c->hdc, s->h);
-    SetTextCharacterExtra(c->hdc, f.tracking);
-    SetTextColor(c->hdc, to_cref(col));
-    SetBkMode(c->hdc, TRANSPARENT);
-
-    SIZE sz;
-    GetTextExtentPoint32W(c->hdc, wb, n, &sz);
+    if (s->h != g_curFont || c->hdc != g_curDC) {
+        SelectObject(c->hdc, s->h);
+        g_curFont = s->h; g_curDC = c->hdc;
+    }
+    if (f.tracking) SetTextCharacterExtra(c->hdc, f.tracking);
+    COLORREF cref = to_cref(col);
+    if (cref != g_curCol) { SetTextColor(c->hdc, cref); g_curCol = cref; }
+    /* background mode is set once when the DC is created and is sticky */
 
     float px = x, py = y;
-    if (halign == AL_C) px = x - sz.cx * 0.5f;
-    else if (halign == AL_R) px = x - sz.cx;
-    if (valign == AV_M) py = y - s->height * 0.5f;
-    else if (valign == AV_B) py = y - s->height;
+    /* Measuring a string costs about as much as drawing it, and the result is
+     * only needed to shift the origin.  Left/top aligned text -- which is most
+     * of the interface, and all 800-odd cells of the split-flap board -- does
+     * not need the measurement at all. */
+    if (halign != AL_L || valign != AV_T) {
+        SIZE sz;
+        GetTextExtentPoint32W(c->hdc, wb, n, &sz);
+        if (halign == AL_C) px = x - sz.cx * 0.5f;
+        else if (halign == AL_R) px = x - sz.cx;
+        if (valign == AV_M) py = y - s->height * 0.5f;
+        else if (valign == AV_B) py = y - s->height;
+    }
 
     ExtTextOutW(c->hdc, (int)(px + 0.5f), (int)(py + 0.5f), 0, NULL, wb, n, NULL);
 
-    SetTextCharacterExtra(c->hdc, 0);
-    SelectObject(c->hdc, old);
+    if (f.tracking) SetTextCharacterExtra(c->hdc, 0);
     cv_gdi_used(c);
 }
 

@@ -98,6 +98,23 @@ Paint paint_radial(float cx,float cy,float r, Color inner, Color outer)
     return p;
 }
 
+/* Axis-aligned linear gradients are by far the most common paint in the
+ * interface: page backgrounds, panels, buttons, tiles.  Evaluating the ramp
+ * per pixel means a divide and four channel interpolations 1.3 million times
+ * for one full-screen fill.  Classifying the paint once lets a vertical ramp
+ * be evaluated per scanline and a horizontal ramp be evaluated once per
+ * column into a reusable row, which is where nearly all of the cost was. */
+enum { GRAD_NONE = 0, GRAD_VERT, GRAD_HORZ };
+
+static int paint_axis(const Paint *p)
+{
+    if (p->kind != PAINT_LINEAR) return GRAD_NONE;
+    float dx = p->x1 - p->x0, dy = p->y1 - p->y0;
+    if (fabsf(dx) < 0.01f && fabsf(dy) > 0.01f) return GRAD_VERT;
+    if (fabsf(dy) < 0.01f && fabsf(dx) > 0.01f) return GRAD_HORZ;
+    return GRAD_NONE;
+}
+
 static inline Color paint_at(const Paint *p, float x, float y)
 {
     float t;
@@ -309,7 +326,7 @@ void cv_destroy(Canvas *c)
         DeleteDC(c->hdc);
     }
     if (c->hbm)  DeleteObject(c->hbm);
-    free(c->cov); free(c->xs); free(c->dirs);
+    free(c->cov); free(c->xs); free(c->dirs); free(c->grad);
     memset(c, 0, sizeof *c);
 }
 
@@ -321,7 +338,7 @@ int cv_resize(Canvas *c, int w, int h)
 
     if (c->hdc) { if (c->hbmOld) SelectObject(c->hdc, c->hbmOld); DeleteDC(c->hdc); c->hdc = NULL; }
     if (c->hbm) { DeleteObject(c->hbm); c->hbm = NULL; }
-    free(c->cov); free(c->xs); free(c->dirs);
+    free(c->cov); free(c->xs); free(c->dirs); free(c->grad);
 
     BITMAPINFO bi;
     memset(&bi, 0, sizeof bi);
@@ -344,6 +361,7 @@ int cv_resize(Canvas *c, int w, int h)
     c->w = w; c->h = h;
 
     c->cov  = (float *)malloc(sizeof(float) * (size_t)(w + 8));
+    c->grad = (uint32_t *)malloc(sizeof(uint32_t) * (size_t)(w + 8));
     c->xs   = (float *)malloc(sizeof(float) * MAX_EDGES);
     c->dirs = (int   *)malloc(sizeof(int)   * MAX_EDGES);
 
@@ -352,7 +370,17 @@ int cv_resize(Canvas *c, int w, int h)
 
     SetBkMode(c->hdc, TRANSPARENT);
     SetGraphicsMode(c->hdc, GM_ADVANCED);
-    return (c->px && c->cov && c->xs && c->dirs);
+
+    /* GDI batches drawing calls per thread and only submits them on a flush.
+     * Because this renderer writes pixels directly into the same DIB that GDI
+     * draws text into, every shape drawn after any text has to force a flush
+     * first -- which, with a batch queue, means a kernel transition hundreds
+     * of times a frame.  Turning batching off makes GDI calls synchronous, so
+     * the flushes become free and the two drawing paths can interleave at no
+     * cost. */
+    GdiSetBatchLimit(1);
+
+    return (c->px && c->cov && c->grad && c->xs && c->dirs);
 }
 
 void cv_gdi_used(Canvas *c) { c->gdiDirty = 1; }
@@ -573,6 +601,16 @@ void cv_fill(Canvas *c, const Path *p, const Paint *paint, float alpha)
                 if (a > 1.f) a = 1.f;
                 blend_one(row + x, sc, (int)(a * ca + 0.5f));
             }
+        } else if (paint_axis(paint) == GRAD_VERT) {
+            float fy = (float)y + 0.5f;
+            Color rc = paint_at(paint, paint->x0, fy);
+            int   ra = (int)(COL_A(rc) * alpha + 0.5f);
+            for (int x = minx; x <= maxx; x++) {
+                float a = cov[x];
+                if (a <= 0.002f) continue;
+                if (a > 1.f) a = 1.f;
+                blend_one(row + x, rc, (int)(a * ra + 0.5f));
+            }
         } else {
             float fy = (float)y + 0.5f;
             for (int x = minx; x <= maxx; x++) {
@@ -690,10 +728,78 @@ static void sdf_rrect(Canvas *c, float x,float y,float w,float h,float r,
     int   ca  = (int)(COL_A(sc) * alpha + 0.5f);
     float shw = strokeW * 0.5f;
 
+    int axis = solid ? GRAD_NONE : paint_axis(paint);
+
+    /* a horizontal ramp is constant down a column, so build it once */
+    if (axis == GRAD_HORZ && c->grad) {
+        for (int px = x0; px < x1; px++)
+            c->grad[px] = paint_at(paint, (float)px + 0.5f, cy);
+    } else if (axis == GRAD_HORZ) {
+        axis = GRAD_NONE;
+    }
+
+    /* The strictly-interior box, where coverage is exactly one. */
+    int haveInner = 0, ix0 = 0, ix1 = 0, iy0 = 0, iy1 = 0;
+    if (strokeW <= 0.f) {
+        ix0 = imax((int)ceilf (x + r),     x0);
+        ix1 = imin((int)floorf(x + w - r), x1);
+        iy0 = imax((int)ceilf (y + r),     y0);
+        iy1 = imin((int)floorf(y + h - r), y1);
+        haveInner = (ix1 - ix0 > 2 && iy1 - iy0 > 2);
+    }
+
     for (int py = y0; py < y1; py++) {
         float fy = (float)py + 0.5f;
         float qy = fabsf(fy - cy) - ey; if (qy < 0.f) qy = 0.f;
         uint32_t *row = c->px + (size_t)py * c->w;
+
+        /* a vertical ramp is constant across a scanline */
+        Color rowCol = sc; int rowA = ca;
+        if (axis == GRAD_VERT) {
+            rowCol = paint_at(paint, cx, fy);
+            rowA   = (int)(COL_A(rowCol) * alpha + 0.5f);
+        }
+
+        /* fast interior span: no distance field, and no blend at all when the
+         * paint is opaque */
+        if (haveInner && py >= iy0 && py < iy1) {
+            if (axis == GRAD_HORZ) {
+                for (int px = ix0; px < ix1; px++) {
+                    Color s2 = c->grad[px];
+                    blend_one(row + px, s2, (int)(COL_A(s2) * alpha + 0.5f));
+                }
+            } else if (rowA >= 255) {
+                uint32_t v = 0xFF000000u | (rowCol & 0x00FFFFFFu);
+                for (int px = ix0; px < ix1; px++) row[px] = v;
+            } else {
+                for (int px = ix0; px < ix1; px++)
+                    blend_one(row + px, rowCol, rowA);
+            }
+            /* then only the two edge bands still need the field */
+            for (int px = x0; px < x1; px++) {
+                if (px == ix0) { px = ix1 - 1; continue; }
+                float fx = (float)px + 0.5f;
+                float qx = fabsf(fx - cx) - ex; if (qx < 0.f) qx = 0.f;
+                float d;
+                if (qx == 0.f && qy == 0.f) {
+                    float ddx = ex - fabsf(fx-cx), ddy = ey - fabsf(fy-cy);
+                    d = -(ddx < ddy ? ddx : ddy) - r;
+                } else {
+                    d = sqrtf(qx*qx + qy*qy) - r;
+                }
+                float cov = 0.5f - d;
+                if (cov <= 0.004f) continue;
+                if (cov > 1.f) cov = 1.f;
+                if (axis == GRAD_HORZ) {
+                    Color s2 = c->grad[px];
+                    blend_one(row + px, s2, (int)(cov * COL_A(s2) * alpha + 0.5f));
+                } else {
+                    blend_one(row + px, rowCol, (int)(cov * rowA + 0.5f));
+                }
+            }
+            continue;
+        }
+
         for (int px = x0; px < x1; px++) {
             float fx = (float)px + 0.5f;
             float qx = fabsf(fx - cx) - ex; if (qx < 0.f) qx = 0.f;
@@ -708,8 +814,12 @@ static void sdf_rrect(Canvas *c, float x,float y,float w,float h,float r,
             float cov = 0.5f - d;
             if (cov <= 0.004f) continue;
             if (cov > 1.f) cov = 1.f;
-            if (solid) blend_one(row + px, sc, (int)(cov * ca + 0.5f));
-            else {
+            if (solid || axis == GRAD_VERT) {
+                blend_one(row + px, rowCol, (int)(cov * rowA + 0.5f));
+            } else if (axis == GRAD_HORZ) {
+                Color s2 = c->grad[px];
+                blend_one(row + px, s2, (int)(cov * COL_A(s2) * alpha + 0.5f));
+            } else {
                 Color s2 = paint_at(paint, fx, fy);
                 blend_one(row + px, s2, (int)(cov * COL_A(s2) * alpha + 0.5f));
             }
@@ -781,7 +891,7 @@ void cv_tri(Canvas *c,float x0,float y0,float x1,float y1,float x2,float y2,Colo
  *  effects
  * ========================================================================== */
 
-#define SHADOW_CACHE 20
+#define SHADOW_CACHE 96
 
 typedef struct {
     int      w, h, r, blur, valid;
@@ -889,9 +999,17 @@ void cv_shadow(Canvas *c, float x,float y,float w,float h,float r,
     int ca = (int)COL_A(col);
 
     for (int py = y0; py < y1; py++) {
-        const uint8_t *src = e->a + (size_t)(py - oy)*e->aw + (x0 - ox);
-        uint32_t *row = c->px + (size_t)py*c->w + x0;
-        for (int px = x0; px < x1; px++, src++, row++) {
+        const uint8_t *rowSrc = e->a + (size_t)(py - oy)*e->aw + (x0 - ox);
+        /* trim the fully transparent margin at both ends of the row */
+        int lead = 0, span = x1 - x0;
+        while (lead < span && rowSrc[lead] == 0) lead++;
+        if (lead == span) continue;
+        int tail = span;
+        while (tail > lead && rowSrc[tail-1] == 0) tail--;
+
+        const uint8_t *src = rowSrc + lead;
+        uint32_t *row = c->px + (size_t)py*c->w + x0 + lead;
+        for (int px = lead; px < tail; px++, src++, row++) {
             int a = *src;
             if (!a) continue;
             blend_one(row, col, div255(a * ca));

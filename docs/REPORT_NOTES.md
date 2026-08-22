@@ -155,23 +155,45 @@ specified the cost function once, at the start, when we knew least.
 
 1. Launch. The splash trains the models — say so out loud; that is real work,
    not a progress bar.
-2. **Airfield** — pan and zoom, click a moving aircraft, note that its routing
-   is the same one the simulation drives it along. Press `F` to speed up the
-   clock and watch a departure taxi, line up and roll.
-3. **Movements** — let a status change and point out the flaps physically
+2. **Create an account** — registration is open, so do it live in front of
+   them. Say out loud that no password is stored anywhere: the digest is a
+   salted SHA-256 iterated a hundred thousand times, and that iteration count
+   is why the button takes a noticeable moment. Tick *Airport staff* so it
+   lands on the operations floor.
+3. **Operations -> Gates** — the strongest single feature. Put a flight on a
+   gate that is already taken; the clash appears in red on the Gantt and in
+   the panel beside it, named, timed, and with a gate that would clear it.
+   Press the button and watch the conflict count go to zero. Then say that a
+   *delayed* flight produces the same clash on its own, which is the point.
+4. **Operations -> Runway** — one runway, so it is the hard limit on the
+   airport. The published timetable is slot-coordinated, so every conflict
+   shown is caused by a delay somebody can act on.
+5. **Emergency** — raise an incident. Severity decides where it sits in the
+   list, what the protocol says, and how long it may go unacknowledged; the
+   badge appears on the sidebar from wherever you are. Passengers are told
+   automatically when a gate moves or a flight is cancelled.
+6. **Analytics** — every number is recomputed from the live world rather
+   than stored, so it cannot drift from the screens it describes.
+3. **Airfield** — pan and zoom, click a moving aircraft, note that its routing
+   is the same one it is being driven along. The clock is the real one, so
+   pick a movement that is happening now; the topbar says how many are moving.
+4. **Movements → Schedule** — page forward through the next ninety-two days.
+   None of it is stored: each date seeds its own generator, so the same date
+   always produces the same programme.
+5. **Movements** — let a status change and point out the flaps physically
    turning.
-4. **Baggage** — follow a bag from check-in through the screening tunnel and
+6. **Baggage** — follow a bag from check-in through the screening tunnel and
    watch the live scan readout produce the score at the diverter.
-5. **AI Suite → BagScan** — the network with live activations; press *Scan
+7. **AI Suite → BagScan** — the network with live activations; press *Scan
    another* to run a different bag through it.
-6. **AI Suite → Stand Allocator** — press **Scramble**, show the wreckage on
+8. **AI Suite → Stand Allocator** — press **Scramble**, show the wreckage on
    the Gantt, then **Run optimiser** and show it recovered. This is the
    strongest single moment in the demo.
-7. **AI Suite → Assistant** — ask "where is MK046", then "what gate?" to show
+9. **AI Suite → Assistant** — ask "where is MK046", then "what gate?" to show
    the follow-up resolving against context.
-8. **Records** — write the files, then open `data/flights.csv` in VS Code
+10. **Records** — write the files, then open `data/flights.csv` in VS Code
    beside the app.
-9. **Git** — `git log --oneline --graph --decorate --all`, then the GitHub
+11. **Git** — `git log --oneline --graph --decorate --all`, then the GitHub
    Network graph.
 
 ---
@@ -190,5 +212,31 @@ brochure, and markers reward it.
   estimates.
 - Single-runway operation only; no slot coordination, no de-icing, no
   cargo handling beyond two parking positions.
-- The rasteriser is single-threaded and CPU-only. It holds 60 fps at
-  1440×900, but it would not scale to a 4K display without work.
+- The rasteriser is single-threaded and CPU-only. It holds a comfortable
+  frame rate at 1440×900 — the Movements board is the heaviest screen, at
+  around 28 fps, because GDI rasterises roughly 800 individual glyphs a
+  frame; a glyph atlas would fix that. It would not scale to a 4K display
+  without work.
+- The security queue is a real FIFO with a priority lane, but the arrival
+  process is a per-tick probability rather than a fitted distribution.
+- Gate conflict detection assumes the occupancy windows in `ops_gate_window`.
+  They are reasonable -- a widebody holds a gate longer than a turboprop --
+  but they are estimates, not Plaisance's published turnaround times.
+- Reviews are written for this application. They are not real passengers'
+  words lifted from a real company's website, which would be passing off
+  somebody else's writing and their name.
+- **The account system protects the application, not the machine.** The
+  password handling is done properly — per-account salt, SHA-256 iterated
+  100,000 times, constant-time comparison, no password stored anywhere — but
+  anybody with the computer can delete `data/accounts.dat` or rebuild from
+  source. It is an operational control, in the way an office door lock is;
+  it is not a security boundary.
+- It is **not** federated sign-in. Google or Microsoft SSO needs a browser,
+  a network round trip and a client secret, none of which a self-contained C
+  application with no third-party libraries has. A screen that imitated
+  Google while collecting a Google password would be a phishing page, so the
+  gate is deliberately AURA's own and is labelled as such.
+- The three-month programme is generated, not published by the airport. The
+  route list, block times and turnarounds are taken from the real boards, but
+  the weekly frequencies are derived from a hash of the flight number rather
+  than from a filed schedule.

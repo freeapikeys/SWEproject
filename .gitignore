@@ -43,3 +43,6 @@ $RECYCLE.BIN/
 *.tmp
 *.laccdb
 ~$*
+data/*.dat
+data/*.allow
+data/accounts.dat

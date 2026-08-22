@@ -35,6 +35,139 @@ static void figure(Canvas *c, float x, float y, float s, Color col, float bob)
  *  desk bank
  * ------------------------------------------------------------------------- */
 
+
+/* --------------------------------------------------------------------------
+ *  the live queues, and booking somebody onto a flight
+ *
+ *  Both lanes are the queue ADT in queue.c, driven from the flight programme
+ *  in main.c.  What is drawn here is the actual contents of those structures,
+ *  not a number made up for the display.
+ * ------------------------------------------------------------------------- */
+
+static void draw_queue_lane(App *a, float x, float y, float w,
+                            const char *label, const Fifo *q, Color col)
+{
+    Canvas *c = &a->cv;
+    int n = fifo_size(q);
+
+    tx_backdrop(C_SURF);
+    tx_draw(c, label, x, y, font_track(TF_UI, 9, TW_BOLD, 1), C_INK_3,
+            AL_L, AV_T);
+    char v[40];
+    snprintf(v, sizeof v, "%d waiting", n);
+    tx_draw(c, v, x + w, y, font_make(TF_UI, 11, TW_SEMI), col, AL_R, AV_T);
+
+    /* one figure per person, up to what fits */
+    float fy = y + 18.f;
+    int show = n;
+    int maxShow = (int)((w - 4.f) / 11.f);
+    if (show > maxShow) show = maxShow;
+    for (int i = 0; i < show; i++)
+        figure(c, x + 4.f + (float)i*11.f, fy, 9.f, col_alpha(col, .85f),
+               anim_time()*2.f + (float)i*0.4f);
+    if (n > show) {
+        char more[14];
+        snprintf(more, sizeof more, "+%d", n - show);
+        tx_draw(c, more, x + 4.f + (float)show*11.f, fy + 4.f,
+                font_make(TF_UI, 10, TW_BOLD), col, AL_L, AV_T);
+    }
+}
+
+static void draw_queues_and_register(App *a, float x, float y, float w, float h)
+{
+    Canvas *c  = &a->cv;
+    World  *wo = &a->w;
+
+    ui_card(x, y, w, h, R_LG);
+    tx_backdrop(C_SURF);
+    tx_draw(c, "QUEUES", x + 18.f, y + 14.f, font_track(TF_UI, 10, TW_BOLD, 2),
+            C_V600, AL_L, AV_T);
+
+    float est = pq_wait_estimate(&a->qSecurity, 0.2f);
+    char hd[110];
+    snprintf(hd, sizeof hd, "security about %.0f min  -  %d served today",
+             est, pq_served(&a->qSecurity));
+    tx_clipped(c, hd, x + 18.f, y + 31.f, w - 36.f, font_make(TF_UI, 11, TW_REG),
+               C_INK_3, AL_L, AV_T);
+
+    draw_queue_lane(a, x + 18.f, y + 52.f, w - 36.f, "SECURITY  -  FAST TRACK",
+                    &a->qSecurity.priority, C_MAGENTA);
+    draw_queue_lane(a, x + 18.f, y + 90.f, w - 36.f, "SECURITY  -  STANDARD",
+                    &a->qSecurity.standard, C_V600);
+    draw_queue_lane(a, x + 18.f, y + 128.f, w - 36.f, "BOARDING GATE",
+                    &a->qBoarding.standard, C_TEAL);
+
+    /* ---- book somebody on ------------------------------------------------
+     *  Laid out from the top rather than from the bottom edge: anchoring it
+     *  to y + h put the caption straight through the boarding lane above. */
+    ui_divider(x + 18.f, y + 172.f, w - 36.f);
+    float ry = y + 202.f;
+
+    /*  The flight the new passenger goes on is whichever is selected on the
+     *  board, falling back to the next departure -- so the control never
+     *  needs a picker of its own.                                          */
+    Flight *target = a->selFlight ? flight_by_id(wo, a->selFlight) : NULL;
+    if (!target || target->arrival || target->state == FS_CANCELLED) {
+        target = NULL;
+        int best = 1 << 30;
+        for (int i = 0; i < wo->nFlights; i++) {
+            Flight *f = &wo->flight[i];
+            if (f->arrival || f->state == FS_CANCELLED) continue;
+            if (f->estMin < (int)wo->clock) continue;
+            if (f->estMin < best) { best = f->estMin; target = f; }
+        }
+    }
+
+    float fw = w - 36.f - 116.f;
+    ui_text_field(uid("cinname"), x + 18.f, ry, fw, 38.f, a->ciName,
+                  (int)sizeof a->ciName, "Book a passenger by name", IC_USER);
+
+    int can = (strlen(a->ciName) >= 3) && target != NULL;
+    if (can) {
+        if (ui_button(uid("cinbook"), x + 18.f + fw + 8.f, ry, 108.f, 38.f,
+                      "Book", BTN_PRIMARY)) {
+            int id = ops_pax_register(wo, a->ciName, target->id);
+            if (id) {
+                ops_pax_checkin(wo, id, 1);
+                a->selPax = id;
+                a->ciName[0] = 0;
+                ui_focus_clear();
+                Passenger *np = NULL;
+                for (int i = 0; i < wo->nPax; i++)
+                    if (wo->pax[i].id == id) { np = &wo->pax[i]; break; }
+                char m[130];
+                snprintf(m, sizeof m, "%s on %s, seat %s, reference %s",
+                         np ? np->name : "", target->no,
+                         np ? np->seat : "--", np ? np->pnr : "--");
+                ui_toast(TOAST_OK, "Booked and checked in", m);
+            } else {
+                ui_toast(TOAST_ERR, "Not booked",
+                         "That flight is full or has closed.");
+            }
+        }
+    } else {
+        tx_backdrop(C_SURF);
+        cv_rrect(c, x + 18.f + fw + 8.f, ry, 108.f, 38.f, 9.f, C_SURF_2);
+        tx_backdrop(C_SURF_2);
+        tx_clipped(c, target ? "3+ letters" : "no flight",
+                   x + 18.f + fw + 62.f, ry + 19.f, 100.f,
+                   font_make(TF_UI, 10, TW_REG), C_INK_4, AL_C, AV_M);
+    }
+
+    tx_backdrop(C_SURF);
+    if (target) {
+        char t[110];
+        char hm[8]; fmt_hhmm(target->estMin, hm);
+        snprintf(t, sizeof t, "BOOK ONTO %s TO %s AT %s", target->no,
+                 wo->airport[target->airport].city, hm);
+        tx_clipped(c, t, x + 18.f, y + 182.f, w - 36.f,
+                   font_track(TF_UI, 9, TW_BOLD, 1), C_INK_3, AL_L, AV_T);
+    } else {
+        tx_draw(c, "NO DEPARTURE LEFT TODAY", x + 18.f, y + 182.f,
+                font_track(TF_UI, 9, TW_BOLD, 1), C_INK_4, AL_L, AV_T);
+    }
+}
+
 static void draw_desks(App *a, float x, float y, float w, float h)
 {
     Canvas *c = &a->cv;
@@ -274,8 +407,12 @@ void screen_checkin(App *a, float x, float y, float w, float h)
     World *wo = &a->w;
     float pad = PAD;
 
-    float deskH = 214.f;
-    draw_desks(a, x + pad, y + pad, w - pad*2.f, deskH);
+    float deskH = 254.f;
+    float fullW = w - pad*2.f;
+    float deskW = fullW * 0.62f;
+    draw_desks(a, x + pad, y + pad, deskW, deskH);
+    draw_queues_and_register(a, x + pad + deskW + 14.f, y + pad,
+                             fullW - deskW - 14.f, deskH);
 
     float ly = y + pad + deskH + 14.f;
     float lh = h - (ly - y) - pad;

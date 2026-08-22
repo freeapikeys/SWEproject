@@ -398,7 +398,13 @@ void screen_baggage(App *a, float x, float y, float w, float h)
         tx_draw(c, sel->tag, rx + 16.f, my + 86.f,
                 font_track(TF_MONO, 16, TW_BOLD, 1), C_INK, AL_L, AV_T);
         char l1[80];
-        snprintf(l1, sizeof l1, "%s   %.1f kg", bs_name(sel->state), sel->weight);
+        /*  Twenty-three kilogrammes is the usual free allowance and thirty-two
+         *  is the point at which a single bag may not be lifted by hand at
+         *  all -- it has to be repacked, not just paid for.                */
+        const char *over = sel->weight > 32.f ? "  OVER 32 kg -- must be repacked"
+                         : (sel->weight > 23.f ? "  over the 23 kg allowance" : "");
+        snprintf(l1, sizeof l1, "%s   %.1f kg%s", bs_name(sel->state),
+                 sel->weight, over);
         tx_draw(c, l1, rx + 16.f, my + 108.f, font_make(TF_UI, 12, TW_SEMI),
                 sel->threat ? C_DANGER : C_INK_2, AL_L, AV_T);
         char l2[90];

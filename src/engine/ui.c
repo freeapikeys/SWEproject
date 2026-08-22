@@ -19,7 +19,7 @@ static int     g_mouseUsed;
 
 /* ------------------------------------------------------- persistent state -- */
 
-#define USLOTS 2048
+#define USLOTS 8192
 typedef struct { uint64_t id; float v; int used; } UState;
 static UState g_us[USLOTS];
 
@@ -31,9 +31,19 @@ float *ui_state(uint64_t id, float initial)
         if (s->used && s->id == id) return &s->v;
         if (!s->used) { s->used = 1; s->id = id; s->v = initial; return &s->v; }
     }
+    /* Table pressure: rather than silently clobbering a stranger's slot and
+     * losing their state every frame, take the entry over cleanly and record
+     * it, so the value at least persists from here on. */
     UState *s = &g_us[h];
-    s->id = id; s->v = initial;
+    s->used = 1; s->id = id; s->v = initial;
     return &s->v;
+}
+
+int ui_state_load(void)
+{
+    int n = 0;
+    for (int i = 0; i < USLOTS; i++) if (g_us[i].used) n++;
+    return n;
 }
 
 /* ------------------------------------------------------------------ core -- */
@@ -254,8 +264,13 @@ int ui_button_i(uint64_t id, float x,float y,float w,float h,
 
     if (variant == BTN_PRIMARY || variant == BTN_DARK ||
         variant == BTN_DANGER  || variant == BTN_SUCCESS) {
-        cv_shadow(g_c, x, sy + 3.f - pr*2.f, w, sh, h*0.5f > 12.f ? 12.f : h*0.5f,
-                  10.f + e*6.f, col_alpha(s.bg, 0.34f + e*0.12f));
+        /* The geometry passed here is deliberately NOT animated.  A shadow is
+         * a blurred mask keyed on its dimensions; letting the press offset or
+         * the hover energy vary the size or the blur radius changes the key
+         * every single frame, so every button rebuilds its mask from scratch
+         * instead of hitting the cache.  Only the colour is animated. */
+        cv_shadow(g_c, x, y + 3.f, w, h, h*0.5f > 12.f ? 12.f : h*0.5f,
+                  12.f, col_alpha(s.bg, 0.34f + e*0.12f));
     }
     float r = h * 0.5f > 14.f ? 14.f : h * 0.42f;
     cv_rrect(g_c, x, sy, w, sh, r, s.bg);
@@ -431,8 +446,9 @@ int ui_stepper(uint64_t id, float x,float y,float w,float h, int *v, int lo, int
 
 /* ------------------------------------------------------------ text field -- */
 
-int ui_text_field(uint64_t id, float x,float y,float w,float h,
-                  char *buf, int cap, const char *placeholder, int icon)
+static int field_impl(uint64_t id, float x,float y,float w,float h,
+                      char *buf, int cap, const char *placeholder, int icon,
+                      int secret)
 {
     int hov = ui_hit(x, y, w, h);
     int focused = (g_focus == id);
@@ -494,24 +510,49 @@ int ui_text_field(uint64_t id, float x,float y,float w,float h,
     *caretf = (float)caret;
 
     Font f = font_make(TF_UI, 14, TW_MED);
+    const float DOT = 11.f;              /* pitch of one masked character   */
     tx_backdrop(bg);
     cv_clip_push(g_c, tx0, y, w - (tx0 - x) - 14.f, h);
-    if (len > 0) {
+    if (len > 0 && secret) {
+        /* Discs drawn by the rasteriser rather than a substitute character:
+         * no code page can turn them into something else, and every glyph is
+         * the same width, so the rendering cannot leak which characters were
+         * typed from the pixel length of the line. */
+        for (int i = 0; i < len; i++)
+            cv_circle(g_c, tx0 + 5.f + (float)i*DOT, y + h*0.5f, 3.2f, C_INK);
+    } else if (len > 0) {
         tx_draw(g_c, buf, tx0, y + h*0.5f, f, C_INK, AL_L, AV_M);
     } else if (placeholder) {
         tx_draw(g_c, placeholder, tx0, y + h*0.5f, f, C_INK_4, AL_L, AV_M);
     }
     if (focused) {
+        float cx;
+        if (secret) {
+            cx = tx0 + 5.f + (float)caret*DOT - 3.f;
+        } else {
         char pre[512];
         int n = caret < (int)sizeof pre - 1 ? caret : (int)sizeof pre - 1;
         memcpy(pre, buf, (size_t)n); pre[n] = 0;
-        float cx = tx0 + (float)tx_width(g_c, pre, f);
+        cx = tx0 + (float)tx_width(g_c, pre, f);
+        }
         float blink = 0.5f + 0.5f*sinf(anim_time()*7.f);
         if (blink > 0.35f)
             cv_rect(g_c, cx, y + h*0.5f - 9.f, 1.8f, 18.f, C_V600);
     }
     cv_clip_pop(g_c);
     return changed;
+}
+
+int ui_text_field(uint64_t id, float x,float y,float w,float h,
+                  char *buf, int cap, const char *placeholder, int icon)
+{
+    return field_impl(id, x, y, w, h, buf, cap, placeholder, icon, 0);
+}
+
+int ui_secret_field(uint64_t id, float x,float y,float w,float h,
+                    char *buf, int cap, const char *placeholder, int icon)
+{
+    return field_impl(id, x, y, w, h, buf, cap, placeholder, icon, 1);
 }
 
 /* ================================================================ chrome == */

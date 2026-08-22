@@ -29,16 +29,31 @@ static int  g_winW = 1440, g_winH = 900;
  *  navigation model
  * ========================================================================== */
 
-typedef struct { const char *label, *sub; int icon; } NavItem;
+/*  Fifteen destinations will not fit a flat list on a laptop screen, so the
+ *  sidebar is grouped and scrolls.  `section` is the heading this entry sits
+ *  under, or NULL to continue the one above.                               */
+typedef struct { const char *label, *sub; int icon; const char *section; } NavItem;
 
 static const NavItem NAV[SC_COUNT] = {
-    { "Airfield",     "live movements",   IC_RADAR    },
-    { "Movements",    "arrivals & departures", IC_PLANE },
-    { "Check-in",     "desks & boarding", IC_TICKET   },
-    { "Baggage",      "handling system",  IC_LUGGAGE  },
-    { "Terminal Flow","queues & search",  IC_USERS    },
-    { "AI Suite",     "five engines",     IC_SPARK    },
-    { "Records",      "files & journal",  IC_DATABASE },
+    { "Welcome",      "find your flight",      IC_USER,     "PASSENGER"  },
+    { "Movements",    "arrivals & departures", IC_PLANE,    NULL         },
+    { "Services",     "landside & transport",  IC_TRUCK,    NULL         },
+    { "Reviews",      "what passengers say",   IC_STAR,     NULL         },
+
+    { "Operations",   "flights, gates, runway",IC_GAUGE,    "OPERATIONS" },
+    { "Airfield",     "live movements",        IC_RADAR,    NULL         },
+    { "Check-in",     "desks & boarding",      IC_TICKET,   NULL         },
+    { "Baggage",      "handling system",       IC_LUGGAGE,  NULL         },
+    { "Terminal Flow","queues & search",       IC_USERS,    NULL         },
+
+    { "Emergency",    "incidents & alerts",    IC_ALERT,    "SAFETY"     },
+    { "Surveillance", "computer vision",       IC_SCAN,     NULL         },
+
+    { "AI Suite",     "five engines",          IC_SPARK,    "INSIGHT"    },
+    { "Analytics",    "reports & totals",      IC_CHART,    NULL         },
+
+    { "Resources",    "fleet, staff, property",IC_LAYERS,   "ADMIN"      },
+    { "Records",      "files & journal",       IC_DATABASE, NULL         },
 };
 
 /* ==========================================================================
@@ -257,36 +272,77 @@ static void draw_sidebar(App *a, float w, float h)
     tx_draw(c, "PLAISANCE OPS", bx + 35.f, by + 26.f,
             font_track(TF_UI, 9, TW_SEMI, 2), col_alpha(C_V300, .95f), AL_L, AV_T);
 
-    /* navigation */
-    float ny = 108.f;
+    /* navigation -- grouped, and scrolled because it no longer fits */
+    float navTop = 100.f;
+    float navH   = h - 200.f - navTop;
+    if (navH < 120.f) navH = 120.f;
+
+    const float IH = 40.f, GAP = 2.f, HDR = 24.f;
+    float contentH = 6.f;
+    for (int i = 0; i < SC_COUNT; i++)
+        contentH += (NAV[i].section ? HDR : 0.f) + IH + GAP;
+
+    float noff = ui_scroll_begin(uid("navscroll"), 4.f, navTop,
+                                 SIDEBAR_W - 8.f, navH, contentH);
+    float ny = navTop + 2.f - noff;
+
     for (int i = 0; i < SC_COUNT; i++) {
-        float ih = 46.f;
+        if (NAV[i].section) {
+            if (ny + HDR > navTop && ny < navTop + navH)
+                tx_draw_a(c, NAV[i].section, 22.f, ny + HDR*0.5f + 2.f,
+                          font_track(TF_UI, 9, TW_BOLD, 2), C_V300,
+                          AL_L, AV_M, 0.55f);
+            ny += HDR;
+        }
+        if (ny + IH < navTop || ny > navTop + navH) { ny += IH + GAP; continue; }
+
         uint64_t id = uidi("nav", i);
         int active = (a->screen == i);
-        int hov = ui_hit(10.f, ny, SIDEBAR_W - 20.f, ih);
+        int hov = ui_hit(10.f, ny, SIDEBAR_W - 20.f, IH);
         float e = ui_hover_f(id, hov);
         float sel = anim_to(id ^ 7ULL, active ? 1.f : 0.f, 14.f);
         if (hov) ui_cursor(1);
 
-        if (sel > 0.01f || e > 0.01f) {
-            Color bgc = col_alpha(HEX(0xFFFFFF), 0.06f*e + 0.10f*sel);
-            cv_rrect(c, 10.f, ny, SIDEBAR_W - 20.f, ih, 12.f, bgc);
-        }
+        if (sel > 0.01f || e > 0.01f)
+            cv_rrect(c, 10.f, ny, SIDEBAR_W - 20.f, IH, 11.f,
+                     col_alpha(HEX(0xFFFFFF), 0.06f*e + 0.10f*sel));
         if (sel > 0.01f) {
-            cv_rrect(c, 10.f, ny + ih*0.5f - 12.f*sel, 3.f, 24.f*sel, 1.5f,
+            cv_rrect(c, 10.f, ny + IH*0.5f - 11.f*sel, 3.f, 22.f*sel, 1.5f,
                      C_V300);
-            cv_glow(c, 40.f, ny + ih*0.5f, 34.f, C_V400, 0.28f*sel);
+            cv_glow(c, 38.f, ny + IH*0.5f, 30.f, C_V400, 0.26f*sel);
         }
-        Color fgc = col_mix(col_alpha(C_V200, .82f), HEX(0xFFFFFF), sel*0.9f + e*0.2f);
-        icon_draw(c, NAV[i].icon, 40.f, ny + ih*0.5f, 19.f, fgc);
-        tx_draw(c, NAV[i].label, 62.f, ny + ih*0.5f - 8.f,
-                font_make(TF_UI, 14, sel > .5f ? TW_SEMI : TW_MED), fgc, AL_L, AV_M);
-        tx_draw_a(c, NAV[i].sub, 62.f, ny + ih*0.5f + 9.f,
-                  font_make(TF_UI, 10, TW_REG), C_V300, AL_L, AV_M, 0.55f + sel*0.3f);
+        Color fgc = col_mix(col_alpha(C_V200, .82f), HEX(0xFFFFFF),
+                            sel*0.9f + e*0.2f);
+        icon_draw(c, NAV[i].icon, 38.f, ny + IH*0.5f, 18.f, fgc);
+        tx_draw(c, NAV[i].label, 58.f, ny + IH*0.5f - 7.f,
+                font_make(TF_UI, 13, sel > .5f ? TW_SEMI : TW_MED), fgc,
+                AL_L, AV_M);
+        tx_draw_a(c, NAV[i].sub, 58.f, ny + IH*0.5f + 8.f,
+                  font_make(TF_UI, 9, TW_REG), C_V300, AL_L, AV_M,
+                  0.55f + sel*0.3f);
+
+        /*  A badge on the screens that are asking for attention, so a gate
+         *  clash or a live incident is visible from whichever screen you
+         *  happen to be on.                                               */
+        int badge = 0;
+        if (i == SC_EMERGENCY) badge = emg_active(&a->emg);
+        if (i == SC_OPS) {
+            GateConflict gc[64];
+            badge = ops_gate_conflicts(&a->w, gc, 64);
+        }
+        if (badge > 0) {
+            char bt[8]; snprintf(bt, sizeof bt, "%d", badge > 99 ? 99 : badge);
+            cv_circle(c, SIDEBAR_W - 26.f, ny + IH*0.5f, 9.f, C_DANGER);
+            tx_backdrop(C_DANGER);
+            tx_draw(c, bt, SIDEBAR_W - 26.f, ny + IH*0.5f,
+                    font_make(TF_UI, 10, TW_BOLD), HEX(0xFFFFFF), AL_C, AV_M);
+            tx_backdrop(C_V950);
+        }
 
         if (hov && a->in.pressed) { a->screen = i; a->screenFade = 0.f; }
-        ny += ih + 4.f;
+        ny += IH + GAP;
     }
+    ui_scroll_end();
 
     /* clock + simulation transport */
     float cy = h - 196.f;
@@ -302,28 +358,24 @@ static void draw_sidebar(App *a, float w, float h)
     tx_draw(c, clk, 28.f, cy + 26.f, font_track(TF_DISPLAY, 27, TW_BOLD, 1),
             HEX(0xFFFFFF), AL_L, AV_T);
 
-    char ds[40];
-    snprintf(ds, sizeof ds, "%02d %s %d", a->w.day, "August", a->w.year);
-    tx_draw(c, ds, 28.f, cy + 58.f, font_make(TF_UI, 11, TW_MED),
-            col_alpha(C_V200, .85f), AL_L, AV_T);
+    char ds[72];
+    snprintf(ds, sizeof ds, "%s %d %s %d", weekday_name(a->w.weekday),
+             a->w.day, month_name(a->w.month), a->w.year);
+    tx_clipped(c, ds, 28.f, cy + 58.f, SIDEBAR_W - 58.f,
+               font_make(TF_UI, 11, TW_MED), col_alpha(C_V200, .85f),
+               AL_L, AV_T);
 
-    float bxs = 132.f;
-    if (ui_icon_btn(uid("pause"), bxs, cy + 52.f, 26.f,
-                    a->w.paused ? IC_PLAY : IC_PAUSE, BTN_GHOST)) {
-        sim_toggle_pause(&a->w);
-    }
-    if (ui_icon_btn(uid("ffwd"), bxs + 30.f, cy + 52.f, 26.f, IC_FFWD, BTN_GHOST)) {
-        float sp[] = { 1.f, 4.f, 8.f, 20.f, 60.f };
-        int idx = 0;
-        for (int i = 0; i < 5; i++) if (fabsf(a->w.speed - sp[i]) < 0.5f) idx = i;
-        a->w.speed = sp[(idx + 1) % 5];
-        a->w.paused = 0;
-        char m[48]; snprintf(m, sizeof m, "Simulation speed x%.0f", a->w.speed);
-        ui_toast(TOAST_INFO, "Clock", m);
-    }
-    char spd[24]; snprintf(spd, sizeof spd, "x%.0f", a->w.speed);
-    tx_draw(c, spd, SIDEBAR_W - 26.f, cy + 65.f, font_make(TF_UI, 11, TW_BOLD),
-            col_alpha(C_V200, .9f), AL_R, AV_M);
+    /*  There is no transport control here, on purpose.  The clock is the
+     *  machine's own clock: it cannot be paused, wound on or run at a
+     *  multiple of real time, so a pause button would be an outright lie
+     *  about what the application does.  What sits here instead is the
+     *  indicator that the feed is live.                                    */
+    float lp = 0.5f + 0.5f*sinf(anim_time()*2.2f);
+    tx_draw(c, "LIVE", SIDEBAR_W - 26.f, cy + 22.f,
+            font_track(TF_UI, 9, TW_BOLD, 1), col_alpha(C_V200, .92f),
+            AL_R, AV_M);
+    cv_circle(c, SIDEBAR_W - 64.f, cy + 22.f, 3.4f + lp*1.4f,
+              col_alpha(C_OK, .5f + .5f*lp));
 
     /* assistant launcher */
     float ay = h - 88.f;
@@ -347,8 +399,24 @@ static void draw_sidebar(App *a, float w, float h)
               HEX(0xFFFFFF), AL_L, AV_T, .75f);
     if (chov && a->in.pressed) { a->chatDock = !a->chatDock; ui_capture_mouse(); }
 
-    tx_draw_a(c, "Trois Freres Systems", SIDEBAR_W*0.5f, h - 26.f,
-              font_track(TF_UI, 9, TW_MED, 1), C_V300, AL_C, AV_T, .55f);
+    /* who is signed in, and the way out */
+    if (a->auth.name[0]) {
+        char who[70];
+        snprintf(who, sizeof who, "%s  -  %s", a->auth.name,
+                 a->auth.kind == ACC_STAFF ? "staff" : "traveller");
+        tx_backdrop(C_V950);
+        tx_clipped(c, who, 20.f, h - 30.f, SIDEBAR_W - 74.f,
+                   font_make(TF_UI, 10, TW_MED), col_alpha(C_V200, .8f),
+                   AL_L, AV_T);
+        if (ui_icon_btn(uid("signout"), SIDEBAR_W - 46.f, h - 36.f, 28.f,
+                        IC_LOCK, BTN_GHOST)) {
+            auth_sign_out(&a->auth);
+            store_journal(&a->w, "Signed out");
+        }
+    } else {
+        tx_draw_a(c, "Trois Freres Systems", SIDEBAR_W*0.5f, h - 26.f,
+                  font_track(TF_UI, 9, TW_MED, 1), C_V300, AL_C, AV_T, .55f);
+    }
     (void)w;
 }
 
@@ -443,7 +511,7 @@ static void draw_help(App *a, float sw, float sh)
     Canvas *c = &a->cv;
     cv_rect(c, 0, 0, sw, sh, col_alpha(C_V950, 0.55f * t));
 
-    float w = 620.f, h = 458.f;
+    float w = 620.f, h = 524.f;
     float x = (sw - w)*0.5f, y = (sh - h)*0.5f + (1.f - ease_out_back(t))*28.f;
     ui_layer_push();
     cv_shadow(c, x, y + 10.f, w, h, R_XL, 40.f, RGBA(20,5,60,120));
@@ -465,9 +533,18 @@ static void draw_help(App *a, float sw, float sh)
       "regression delay model, a multilayer perceptron for hold baggage "
       "screening, a simulated annealing stand allocator, and a Holt "
       "smoothing forecaster feeding an M/M/c queue model.\n\n"
-      "Keyboard:  1-7 switch screens   SPACE pause the clock   "
-      "F fast forward   A open the assistant   S save all records   "
-      "ESC close panels";
+      "The clock is the machine's own clock, shifted to Mauritius time. "
+      "Nothing here is played back or fast forwarded: there is no speed "
+      "control and no pause, and what the screens show is what the airport "
+      "is doing at this moment. The movement programme covers ninety-two "
+      "days and is generated from the date, so every day has its own "
+      "schedule and the board still works three months out.\n\n"
+      "Fifteen screens in five groups: what a passenger needs, what the "
+      "operations floor needs, safety, the decision-support engines, and the "
+      "administrative record. Gate conflicts and live incidents raise a badge "
+      "on the sidebar so they are visible from anywhere.\n\n"
+      "Keyboard:  1-9 and 0 reach the first ten screens   A the assistant   "
+      "S save all records   L sign out   ESC close panels";
     tx_para(c, body, x + 30.f, y + 92.f, w - 60.f,
             font_make(TF_UI, 13, TW_REG), C_INK_2, 5);
 
@@ -568,8 +645,119 @@ static void draw_boot(App *a, float sw, float sh)
 }
 
 /* ==========================================================================
+ *  the passenger queues
+ *
+ *  Security and boarding are both queues in the textbook sense, and both are
+ *  driven here from the live flight programme: passengers join when their
+ *  flight reaches the right point in its day, and are called forward at the
+ *  rate the desks can actually process them.  Everything about the ordering
+ *  lives in queue.c -- this only decides who joins and how fast they leave.
+ * ========================================================================== */
+
+static void serve_queue(App *a, PaxQueue *q, float perPaxSec, float stepSec,
+                        int markSecurity)
+{
+    World *wo = &a->w;
+    float rate = (float)q->desks * (60.f / perPaxSec);      /* pax per minute */
+    q->servedFrac += rate * (stepSec / 60.f);
+
+    while (q->servedFrac >= 1.f) {
+        q->servedFrac -= 1.f;
+        float wait = 0.f; int pri = 0;
+        int pax = pq_next(q, wo->clock, &wait, &pri);
+        if (pax < 0) { q->servedFrac = 0.f; break; }
+        for (int i = 0; i < wo->nPax; i++)
+            if (wo->pax[i].id == pax) {
+                if (markSecurity) wo->pax[i].security = 1;
+                else              wo->pax[i].boarded  = 1;
+                break;
+            }
+    }
+}
+
+static void update_queues(App *a, float dtSec)
+{
+    World *wo = &a->w;
+    a->queueTimer += dtSec;
+    if (a->queueTimer < 0.25f) return;
+    float step = a->queueTimer;
+    a->queueTimer = 0.f;
+
+    for (int i = 0; i < wo->nPax; i++) {
+        Passenger *p = &wo->pax[i];
+        Flight *f = flight_by_id(wo, p->flight);
+        if (!f || f->arrival || f->state == FS_CANCELLED) continue;
+        float toGo = (float)f->estMin - wo->clock;
+
+        /*  Security: passengers turn up from about two and a half hours
+         *  before departure and stop arriving once the gate is closing.
+         *  They trickle in rather than all at once, so the lane fills the
+         *  way a real one does.                                          */
+        if (!p->queuedSec && toGo < 150.f && toGo > 25.f) {
+            wo->rng = wo->rng * 1664525u + 1013904223u;
+            if ((wo->rng >> 16) % 100u < 6u) {
+                int priority = p->fastTrack || p->assist != AS_NONE;
+                if (pq_join(&a->qSecurity, p->id, priority, wo->clock))
+                    p->queuedSec = 1;
+            }
+        }
+
+        /*  Boarding: only once the flight is actually calling passengers,
+         *  and only for those who are already through security.          */
+        if (!p->queuedGate && p->security &&
+            (f->state == FS_BOARDING || f->state == FS_FINAL)) {
+            int priority = p->fastTrack || p->assist != AS_NONE || p->loyalty >= 2;
+            if (pq_join(&a->qBoarding, p->id, priority, wo->clock))
+                p->queuedGate = 1;
+        }
+    }
+
+    /*  Twelve seconds a passenger through a screening lane, five seconds at
+     *  a boarding gate scanner.  Both are near enough what the equipment
+     *  actually manages.                                                  */
+    serve_queue(a, &a->qSecurity, 12.f, step, 1);
+    serve_queue(a, &a->qBoarding,  5.f, step, 0);
+}
+
+/* ==========================================================================
  *  frame
  * ========================================================================== */
+
+/*  Midnight.  world_generate_day() has already replaced the movement
+ *  programme by the time this runs, so everything that was reasoning about
+ *  yesterday's flights is pointed at today's.  The trained weights are kept
+ *  -- the models do not need retraining, only re-running.                  */
+static void new_operating_day(App *a)
+{
+    ai_delay_run_all(&a->delay, &a->w);
+    vision_init(&a->vision, &a->w);
+    ai_flow_observe(&a->flow, &a->w);
+    ai_flow_forecast(&a->flow, &a->w);
+
+    /*  The notifier and the queues are about today's flights, so both are
+     *  reset rather than carried over -- otherwise the first scan of the new
+     *  day announces a gate change for every movement at once.            */
+    nt_init(&a->notify);
+    nt_scan(&a->notify, &a->w);
+    pq_init(&a->qSecurity, "Security screening", 5);
+    pq_init(&a->qBoarding, "Boarding gate", 2);
+    an_build(&a->report, &a->w);
+
+    a->selFlight = 0;
+    a->selBag    = 0;
+    a->selPax    = 0;
+    a->selStand  = -1;
+    a->cvFocus   = -1;
+    a->bagFocus  = -1;
+    a->inspectOpen = 0;
+
+    store_journal(&a->w, "Operating day rollover");
+    char m[110];
+    snprintf(m, sizeof m, "%d movements for %s %d %s",
+             a->w.nFlights, weekday_name(a->w.weekday), a->w.day,
+             month_name(a->w.month));
+    ui_toast(TOAST_INFO, "New operating day", m);
+}
 
 static void app_frame(App *a)
 {
@@ -591,8 +779,20 @@ static void app_frame(App *a)
             a->bagnet = ai_bagnet();
             ai_bagnet_train(a->bagnet);
             sim_warm_baggage(&a->w, 200.f);
+            vision_init(&a->vision, &a->w);
             ai_flow_observe(&a->flow, &a->w);
             ai_flow_forecast(&a->flow, &a->w);
+            auth_init(&a->auth, "data");
+            emg_init(&a->emg);
+            nt_init(&a->notify);
+            nt_scan(&a->notify, &a->w);      /* record the baseline, silently */
+            rv_init(&a->reviews, &a->w);
+            lp_init(&a->lost, &a->w);
+            pq_init(&a->qSecurity, "Security screening", 5);
+            pq_init(&a->qBoarding, "Boarding gate", 2);
+            an_build(&a->report, &a->w);
+            a->rvStars = 5;
+            a->rvShowAll = 1;
             store_journal(&a->w, "AURA session started");
         }
         if (a->bootT > 2.6f || (a->in.pressed && a->bootT > 1.4f)) {
@@ -605,8 +805,32 @@ static void app_frame(App *a)
         return;
     }
 
+    long dayBefore = a->w.epochDay;
     sim_tick(&a->w, a->dt);
+    if (a->w.epochDay != dayBefore) new_operating_day(a);
+
+    /*  Nothing but the gate is drawn until somebody has signed in.  The
+     *  world still ticks behind it, so the clock and the programme are
+     *  current the moment the console opens rather than catching up.       */
+    if (!auth_is_open(&a->auth)) {
+        screen_login(a, sw, sh);
+        ui_end();
+        return;
+    }
+
     ai_chat_update(&a->w, &a->chat, a->dt);
+    update_queues(a, a->dt);
+
+    /*  The notifier watches for gate moves, delays and status changes.  Twice
+     *  a second is plenty -- a passenger cannot read faster than that, and
+     *  scanning every flight sixty times a second is wasted work.         */
+    a->notifyTimer += a->dt;
+    if (a->notifyTimer > 0.5f) {
+        a->notifyTimer = 0.f;
+        nt_scan(&a->notify, &a->w);
+    }
+    /* the vision pipeline only runs while its screen is open */
+    if (a->screen == SC_VISION) vision_tick(&a->vision, &a->w, a->dt);
     ps_update(&a->fx, a->dt, 260.f, 0.9f);
 
     a->flowTimer += a->dt;
@@ -635,14 +859,23 @@ static void app_frame(App *a)
     float lift = (1.f - f) * 14.f;
 
     cv_clip_push(c, cx, TOPBAR_H, cw, sh - TOPBAR_H);
+    float sy = TOPBAR_H + lift, shh = sh - TOPBAR_H;
     switch (a->screen) {
-    case SC_AIRFIELD: screen_airfield(a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_BOARD:    screen_board   (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_CHECKIN:  screen_checkin (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_BAGGAGE:  screen_baggage (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_FLOW:     screen_flow    (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_AI:       screen_ai      (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
-    case SC_RECORDS:  screen_records (a, cx, TOPBAR_H + lift, cw, sh - TOPBAR_H); break;
+    case SC_WELCOME:   screen_welcome  (a, cx, sy, cw, shh); break;
+    case SC_BOARD:     screen_board    (a, cx, sy, cw, shh); break;
+    case SC_SERVICES:  screen_services (a, cx, sy, cw, shh); break;
+    case SC_REVIEWS:   screen_reviews  (a, cx, sy, cw, shh); break;
+    case SC_OPS:       screen_ops      (a, cx, sy, cw, shh); break;
+    case SC_AIRFIELD:  screen_airfield (a, cx, sy, cw, shh); break;
+    case SC_CHECKIN:   screen_checkin  (a, cx, sy, cw, shh); break;
+    case SC_BAGGAGE:   screen_baggage  (a, cx, sy, cw, shh); break;
+    case SC_FLOW:      screen_flow     (a, cx, sy, cw, shh); break;
+    case SC_EMERGENCY: screen_emergency(a, cx, sy, cw, shh); break;
+    case SC_VISION:    screen_vision   (a, cx, sy, cw, shh); break;
+    case SC_AI:        screen_ai       (a, cx, sy, cw, shh); break;
+    case SC_ANALYTICS: screen_analytics(a, cx, sy, cw, shh); break;
+    case SC_RESOURCES: screen_resources(a, cx, sy, cw, shh); break;
+    case SC_RECORDS:   screen_records  (a, cx, sy, cw, shh); break;
     default: break;
     }
     cv_clip_pop(c);
@@ -661,17 +894,18 @@ static void app_frame(App *a)
 
 static void key_shortcuts(App *a, int vk)
 {
-    if (vk >= '1' && vk <= '7') { a->screen = vk - '1'; return; }
+    /*  Ten keys, fifteen screens.  The digits reach the first ten in sidebar
+     *  order; the rest are a click away, which is the honest trade rather
+     *  than inventing a second modifier nobody will remember.             */
+    if (vk >= '1' && vk <= '9') { a->screen = vk - '1'; return; }
+    if (vk == '0' && SC_COUNT > 9) { a->screen = 9; return; }
     switch (vk) {
-    case VK_SPACE: sim_toggle_pause(&a->w); break;
-    case 'F': {
-        float sp[] = { 1.f, 4.f, 8.f, 20.f, 60.f };
-        int idx = 0;
-        for (int i = 0; i < 5; i++) if (fabsf(a->w.speed - sp[i]) < 0.5f) idx = i;
-        a->w.speed = sp[(idx + 1) % 5];
-        a->w.paused = 0;
-    } break;
     case 'A': a->chatDock = !a->chatDock; break;
+    case 'L':
+        auth_sign_out(&a->auth);
+        store_journal(&a->w, "Operator signed out");
+        ui_toast(TOAST_INFO, "Console locked", "Sign in again to continue.");
+        break;
     case 'S': {
         StoreResult r = store_save_all(&a->w);
         char m[120];
@@ -740,7 +974,11 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         a->in.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
         a->in.ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
         /* shortcuts only when a text field does not have focus */
-        if (!ui_field_focused(uid("chatfield")) &&
+        /* shortcuts are dead while the console is locked, or a field has
+         * focus -- otherwise typing an address into the gate would page
+         * through the screens behind it */
+        if (auth_is_open(&a->auth) &&
+            !ui_field_focused(uid("chatfield")) &&
             !ui_field_focused(uid("boardsearch")) &&
             !ui_field_focused(uid("paxsearch")) &&
             !ui_field_focused(uid("bagsearch")))
@@ -804,9 +1042,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE prev, LPSTR cmd, int show)
     g_app.fieldLabels = 1;
     g_app.fieldTrails = 1;
     g_app.bagAutoInject = 1;
-    g_app.screen = SC_AIRFIELD;
+    g_app.screen = SC_WELCOME;
     g_app.prevScreen = -1;
     g_app.selStand = -1;
+    g_app.cvFocus  = -1;
+    g_app.cvIds = g_app.cvTrails = g_app.cvHeatmap = 1;
 
     ShowWindow(g_hwnd, show);
     UpdateWindow(g_hwnd);

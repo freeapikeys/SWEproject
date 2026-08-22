@@ -76,7 +76,7 @@ float ai_bagnet_eval(BagNet *n, const float *x, float *h1out, float *h2out)
  *  the false-alarm rate the screening hall actually lives with.
  * ========================================================================== */
 
-#define BAG_TRAIN 1600
+#define BAG_TRAIN 3000
 
 /*  The two populations, as [threat lo, threat hi, clean lo, clean hi] per
  *  feature.  Training and live scanning both draw from this one table, which
@@ -113,8 +113,10 @@ static void make_bag_corpus(float X[BAG_TRAIN][BAG_IN], float y[BAG_TRAIN],
     for (int i = 0; i < BAG_TRAIN; i++) {
         int threat = (rnd_f(rng) < 0.20f);
         bag_draw_features(X[i], threat, rng);
-        /* label noise: some bags are recorded wrongly by the search team */
-        if (rnd_f(rng) < 0.045f) threat = !threat;
+        /* Label noise: the search team occasionally records a result
+         * wrongly.  This sets a hard ceiling on achievable recall, so it is
+         * kept to a realistic rate rather than an arbitrary one. */
+        if (rnd_f(rng) < 0.025f) threat = !threat;
         y[i] = threat ? 1.f : 0.f;
     }
 }
@@ -153,8 +155,14 @@ void ai_bagnet_train(BagNet *n)
     memset(v2,0,sizeof v2); memset(vb2,0,sizeof vb2);
     memset(v3,0,sizeof v3); vb3 = 0.f;
 
-    const float lr = 0.06f, mom = 0.86f;
-    const int   EPOCHS = 260;
+    /* One "epoch" is BAG_TRAIN stochastic updates, so enlarging the corpus
+     * also multiplies the number of steps taken.  Keeping the old step size
+     * after tripling the corpus drove the weights past the point where the
+     * leaky units still carry gradient, and the network collapsed onto the
+     * majority class -- 79% accurate and completely useless, because it
+     * flagged nothing at all.  The step is scaled to the new budget. */
+    const float lr = 0.02f, mom = 0.86f;
+    const int   EPOCHS = 220;
 
     for (int ep = 0; ep < EPOCHS; ep++) {
         float loss = 0.f;

@@ -24,17 +24,26 @@ static void seed_airlines(World *w)
         { "MK","MAU","Air Mauritius",       "Plaisance",     0xC8102E },
         { "EK","UAE","Emirates",            "Dubai",         0xD71921 },
         { "AF","AFR","Air France",          "Paris CDG",     0x002157 },
-        { "BA","BAW","British Airways",     "London LHR",    0x1B4A8B },
+        { "KL","KLM","KLM",                 "Amsterdam",     0x00A1DE },
+        { "BA","BAW","British Airways",     "London LGW",    0x1B4A8B },
         { "TK","THY","Turkish Airlines",    "Istanbul",      0xC70A0C },
         { "KQ","KQA","Kenya Airways",       "Nairobi",       0xB01C2E },
         { "4Z","LNK","Airlink",             "Johannesburg",  0x0F4C81 },
+        { "FA","SFR","Safair",              "Johannesburg",  0x00954C },
         { "UU","REU","Air Austral",         "Saint-Denis",   0xE2001A },
         { "SS","CRL","Corsair International","Paris ORY",    0xE30613 },
         { "6E","IGO","IndiGo",              "Mumbai",        0x001B94 },
+        { "AI","AIC","Air India",           "Mumbai",        0xD5122B },
         { "SV","SVA","Saudia",              "Jeddah",        0x006C35 },
         { "DE","CFG","Condor",              "Frankfurt",     0xF7C600 },
+        { "4Y","OCN","Discover Airlines",   "Frankfurt",     0x0B3D7C },
+        { "WK","EDW","Edelweiss Air",       "Zurich",        0xE2001A },
+        { "OS","AUA","Austrian Airlines",   "Vienna",        0xCC0000 },
+        { "AZ","ITY","ITA Airways",         "Rome",          0x004B87 },
         { "HM","SEY","Air Seychelles",      "Mahe",          0xE4002B },
         { "MD","MDG","Madagascar Airlines", "Antananarivo",  0x00843D },
+        { "2W","WLD","World2Fly",           "Madrid",        0x00A9E0 },
+        { "E9","EVE","Iberojet",            "Madrid",        0xE85A0C },
     };
     w->nAirlines = (int)(sizeof A / sizeof A[0]);
     for (int i = 0; i < w->nAirlines; i++) {
@@ -80,7 +89,7 @@ static void seed_airports(World *w)
 {
     struct { const char *ia, *ct, *co; float la, lo; int mn; } P[] = {
         { "RRG","Rodrigues",     "Mauritius",     -19.757f,  63.361f,  95 },
-        { "RUN","Saint-Denis",   "Reunion",       -20.887f,  55.513f,  50 },
+        { "RUN","Roland Garros", "Reunion",       -20.887f,  55.513f,  50 },
         { "TNR","Antananarivo",  "Madagascar",    -18.797f,  47.479f, 110 },
         { "SEZ","Mahe",          "Seychelles",     -4.674f,  55.522f, 180 },
         { "JNB","Johannesburg",  "South Africa",  -26.139f,  28.246f, 245 },
@@ -136,14 +145,14 @@ static void seed_stands(World *w)
         { "A2", ST_CONTACT, 372, 470, 90, 65.f, 1,  2 },
         { "A3", ST_CONTACT, 444, 470, 90, 65.f, 1,  3 },
         { "A4", ST_CONTACT, 516, 470, 90, 65.f, 1,  4 },
-        { "A5", ST_CONTACT, 588, 470, 90, 52.f, 1,  5 },
+        { "A5", ST_CONTACT, 588, 470, 90, 65.f, 1,  5 },
         { "A6", ST_CONTACT, 660, 470, 90, 40.f, 1,  6 },
         { "A7", ST_CONTACT, 726, 470, 90, 40.f, 1,  7 },
         { "A8", ST_CONTACT, 786, 470, 90, 36.f, 1,  8 },
         { "R1", ST_REMOTE,  196, 496, 60, 65.f, 0, 21 },
         { "R2", ST_REMOTE,  196, 556, 60, 65.f, 0, 22 },
-        { "R3", ST_REMOTE,  128, 496, 60, 40.f, 0, 23 },
-        { "R4", ST_REMOTE,  128, 556, 60, 40.f, 0, 24 },
+        { "R3", ST_REMOTE,  128, 496, 60, 65.f, 0, 23 },
+        { "R4", ST_REMOTE,  128, 556, 60, 65.f, 0, 24 },
         { "R5", ST_REMOTE,  862, 500,120, 40.f, 0, 25 },
         { "R6", ST_REMOTE,  862, 560,120, 40.f, 0, 26 },
         { "R7", ST_REMOTE,  930, 500,120, 36.f, 0, 27 },
@@ -154,8 +163,15 @@ static void seed_stands(World *w)
         { "R12",ST_REMOTE,  982, 560,120, 45.f, 0, 32 },
         { "R13",ST_REMOTE,   64, 610, 60, 65.f, 0, 33 },
         { "R14",ST_REMOTE,  132, 610, 60, 65.f, 0, 34 },
-        { "C1", ST_CARGO,    62, 420,  0, 60.f, 0,  0 },
-        { "C2", ST_CARGO,    62, 356,  0, 60.f, 0,  0 },
+        /* Southern overflow row on the eastern apron.  Plaisance parks the
+         * evening long-haul bank out here when the pier is full; without it
+         * the last few movements of the night have nowhere to go. */
+        { "R15",ST_REMOTE,  862, 616,120, 65.f, 0, 35 },
+        { "R16",ST_REMOTE,  930, 616,120, 65.f, 0, 36 },
+        { "R17",ST_REMOTE,  982, 616,120, 65.f, 0, 37 },
+        { "R18",ST_REMOTE,  794, 616,120, 52.f, 0, 38 },
+        { "C1", ST_CARGO,    62, 420,  0, 65.f, 0,  0 },
+        { "C2", ST_CARGO,    62, 356,  0, 65.f, 0,  0 },
     };
     w->nStands = (int)(sizeof S / sizeof S[0]);
     for (int i = 0; i < w->nStands; i++) {
@@ -275,6 +291,32 @@ void fmt_hhmmss(float fm, char *out)
 }
 
 int mins_now(const World *w) { return (int)w->clock; }
+
+const char *as_name(SpecialAssist a)
+{
+    switch (a) {
+    case AS_WHEELCHAIR: return "Wheelchair";
+    case AS_MOBILITY:   return "Reduced mobility";
+    case AS_VISUAL:     return "Visually impaired";
+    case AS_HEARING:    return "Hearing impaired";
+    case AS_MINOR:      return "Unaccompanied minor";
+    case AS_MEDICAL:    return "Medical clearance";
+    default:            return "None";
+    }
+}
+
+const char *as_code(SpecialAssist a)
+{
+    switch (a) {
+    case AS_WHEELCHAIR: return "WCHR";
+    case AS_MOBILITY:   return "WCHS";
+    case AS_VISUAL:     return "BLND";
+    case AS_HEARING:    return "DEAF";
+    case AS_MINOR:      return "UMNR";
+    case AS_MEDICAL:    return "MEDA";
+    default:            return "----";
+    }
+}
 
 const char *wx_name(int k)
 {
@@ -426,6 +468,100 @@ int field_taxi_path(const World *w, int standIdx, int departing,
     return n;
 }
 
+
+/* ==========================================================================
+ *  the clock
+ *
+ *  Plaisance keeps Mauritius time, UTC+4, and Mauritius does not observe
+ *  daylight saving, so airport local time is the UTC instant plus exactly
+ *  four hours all year round.  Taking it that way rather than from the
+ *  machine's own time zone means the board reads correctly whatever zone the
+ *  laptop running it happens to be set to.
+ *
+ *  There is no simulated time anywhere in this application.
+ * ========================================================================== */
+
+/*  Civil-date conversion, exact across month ends, leap years and century
+ *  boundaries.  The schedule is keyed on a day number, so this has to be
+ *  right rather than approximately right.                                  */
+long days_from_civil(int y, int m, int d)
+{
+    y -= (m <= 2);
+    long era = (y >= 0 ? y : y - 399) / 400;
+    unsigned yoe = (unsigned)(y - era * 400);                  /* 0..399    */
+    unsigned doy = (unsigned)((153*(m + (m > 2 ? -3 : 9)) + 2)/5 + d - 1);
+    unsigned doe = yoe*365 + yoe/4 - yoe/100 + doy;            /* 0..146096 */
+    return era * 146097L + (long)doe - 719468L;
+}
+
+void civil_from_days(long z, int *y, int *m, int *d)
+{
+    z += 719468L;
+    long era = (z >= 0 ? z : z - 146096) / 146097;
+    unsigned doe = (unsigned)(z - era * 146097);
+    unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
+    long yr  = (long)yoe + era * 400;
+    unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
+    unsigned mp  = (5*doy + 2)/153;
+    unsigned dd  = doy - (153*mp + 2)/5 + 1;
+    unsigned mm  = (mp < 10) ? mp + 3 : mp - 9;
+    *y = (int)(yr + (mm <= 2 ? 1 : 0));
+    *m = (int)mm;
+    *d = (int)dd;
+}
+
+/* 1 January 1970 was a Thursday, so day zero is weekday 4 with Sunday = 0 */
+static int weekday_of(long epochDay)
+{
+    return (int)(((epochDay % 7) + 7 + 4) % 7);
+}
+
+const char *month_name(int m)
+{
+    static const char *N[13] = { "", "January", "February", "March", "April",
+        "May", "June", "July", "August", "September", "October", "November",
+        "December" };
+    return (m >= 1 && m <= 12) ? N[m] : "";
+}
+
+const char *weekday_name(int wd)
+{
+    static const char *N[7] = { "Sunday", "Monday", "Tuesday", "Wednesday",
+                                "Thursday", "Friday", "Saturday" };
+    return (wd >= 0 && wd < 7) ? N[wd] : "";
+}
+
+void world_sync_clock(World *w)
+{
+    /*  Shifting in the 100-nanosecond FILETIME domain rather than poking at
+     *  the fields of a SYSTEMTIME means midnight, month ends, leap days and
+     *  the new year all look after themselves.                             */
+    FILETIME ft;
+    ULARGE_INTEGER u;
+    GetSystemTimeAsFileTime(&ft);
+    u.LowPart  = ft.dwLowDateTime;
+    u.HighPart = ft.dwHighDateTime;
+    u.QuadPart += 4ULL * 3600ULL * 10000000ULL;              /* UTC+4       */
+    ft.dwLowDateTime  = u.LowPart;
+    ft.dwHighDateTime = u.HighPart;
+
+    SYSTEMTIME st;
+    if (!FileTimeToSystemTime(&ft, &st)) return;
+
+    w->clock = (float)st.wHour * 60.f
+             + (float)st.wMinute
+             + (float)st.wSecond / 60.f
+             + (float)st.wMilliseconds / 60000.f;
+    w->day   = (int)st.wDay;
+    w->month = (int)st.wMonth;
+    w->year  = (int)st.wYear;
+
+    long ed = days_from_civil(w->year, w->month, w->day);
+    w->weekday = weekday_of(ed);
+    if (w->epochDay != 0 && ed != w->epochDay) w->dayRolled = 1;
+    w->epochDay = ed;
+}
+
 /* ==========================================================================
  *  world generation
  * ========================================================================== */
@@ -434,14 +570,15 @@ void world_init(World *w)
 {
     memset(w, 0, sizeof *w);
     w->rng   = 0xA17C0DEu;
-    w->speed = 8.f;
-    w->clock = 10.f * 60.f + 10.f;
-    w->day = 14; w->month = 8; w->year = 2026;
     w->tempC = 24.6f; w->windKt = 12.f; w->windDir = 135.f;
     w->visKm = 10.f;  w->qnh = 1017.f;  w->humidity = 74.f;
     w->wxKind = 1;
     w->activeRunway = 14;
     world_seed_data(w);
+
+    world_sync_clock(w);           /* the real date, before anything is made */
+    w->baseDay   = w->epochDay;    /* the programme is published from today  */
+    w->dayRolled = 0;
     world_generate(w);
 }
 
@@ -511,6 +648,27 @@ static void make_reg(World *w, int airline, char *out, uint32_t *rng)
                 'A'+rnd_int(rng,0,25));
     } else if (strcmp(ia, "HM") == 0) {
         sprintf(out, "S7-A%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "AI") == 0) {
+        sprintf(out, "VT-%c%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25),
+                'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "KL") == 0) {
+        sprintf(out, "PH-B%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "FA") == 0) {
+        sprintf(out, "ZS-%c%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25),
+                'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "4Y") == 0) {
+        sprintf(out, "D-A%c%c%c", 'I'+rnd_int(rng,0,8), 'A'+rnd_int(rng,0,25),
+                'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "WK") == 0) {
+        sprintf(out, "HB-J%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "OS") == 0) {
+        sprintf(out, "OE-L%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "AZ") == 0) {
+        sprintf(out, "EI-%c%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25),
+                'A'+rnd_int(rng,0,25));
+    } else if (strcmp(ia, "2W") == 0 || strcmp(ia, "E9") == 0) {
+        sprintf(out, "EC-%c%c%c", 'M'+rnd_int(rng,0,12), 'A'+rnd_int(rng,0,25),
+                'A'+rnd_int(rng,0,25));
     } else {
         sprintf(out, "5R-%c%c%c", 'A'+rnd_int(rng,0,25), 'A'+rnd_int(rng,0,25),
                 'A'+rnd_int(rng,0,25));
@@ -531,44 +689,128 @@ typedef struct {
 } RouteRow;
 
 static const RouteRow ROUTES[] = {
-    /* airline, arr flight, destination, type, arrive, depart, dep flight  */
-    { "MK","MK015","LHR","359",  345,  1305, "MK014" },
-    { "AF","AF464","CDG","77W",  375,  1355, "AF463" },
-    { "EK","EK701","DXB","77W",  405,   700, "EK702" },
-    { "TK","TK741","IST","789",  430,  1310, "TK742" },
-    { "MK","MK047","JNB","332",  455,   580, "MK048" },
-    { "MK","MK201","RRG","AT7",  470,   555, "MK202" },
-    { "UU","UU974","RUN","320",  495,   580, "UU975" },
-    { "MK","MK041","BOM","339",  510,  1250, "MK042" },
-    { "4Z","4Z252","JNB","E90",  540,   625, "4Z253" },
-    { "MK","MK203","RRG","AT7",  585,   670, "MK204" },
-    { "SS","SS910","ORY","332",  600,  1330, "SS911" },
-    { "KQ","KQ276","NBO","738",  625,   715, "KQ277" },
-    { "MK","MK051","TNR","AT7",  640,   735, "MK052" },
-    { "6E","6E065","BOM","32N",  660,   750, "6E066" },
-    { "MK","MK205","RRG","AT7",  700,   785, "MK206" },
-    { "MD","MD731","TNR","AT7",  720,   810, "MD732" },
-    { "UU","UU976","RUN","320",  745,   830, "UU977" },
-    { "HM","HM062","SEZ","320",  770,   860, "HM063" },
-    { "MK","MK049","DUR","332",  790,   885, "MK050" },
-    { "MK","MK207","RRG","AT7",  815,   900, "MK208" },
-    { "4Z","4Z254","JNB","E90",  845,   930, "4Z255" },
-    { "MK","MK043","DEL","339",  870,  1265, "MK044" },
-    { "UU","UU978","RUN","320",  900,   985, "UU979" },
-    { "DE","DE2314","FRA","333", 930,  1290, "DE2315" },
-    { "MK","MK209","RRG","AT7",  950,  1035, "MK210" },
-    { "SV","SV831","JED","789",  985,  1320, "SV832" },
-    { "MK","MK045","CPT","332", 1010,  1105, "MK046" },
-    { "BA","BA2065","LGW","789",1040,  1345, "BA2066" },
-    { "MK","MK211","RRG","AT7", 1065,  1150, "MK212" },
-    { "MK","MK017","CDG","359", 1090,  1300, "MK016" },
-    { "EK","EK703","DXB","77W", 1120,  1400, "EK704" },
-    { "MK","MK053","SEZ","AT7", 1145,  1235, "MK054" },
-    { "4Z","4Z256","JNB","E90", 1170,  1255, "4Z257" },
-    { "MK","MK031","KUL","339", 1195,  1385, "MK032" },
-    { "MK","MK213","RRG","AT7", 1220,  1310, "MK214" },
-    { "MK","MK055","PER","332", 1250,  1420, "MK056" },
+    /* Reconstructed from the published Plaisance boards: the overnight
+     * European bank lands between 04:30 and 07:00, the Indian Ocean and
+     * regional rotations work through the day, and the long-haul departures
+     * stack up from 20:00 to just before midnight.  Flight numbers, block
+     * times and turnarounds follow the real timetable.                      */
+    /* airline, arr flight, other end, type, arrive, depart, dep flight      */
+    { "KQ","KQ274", "NBO","738",  275,   380, "KQ275"  },
+    { "MK","MK015", "CDG","359",  340,  1310, "MK014"  },
+    { "MK","MK053", "LGW","339",  410,  1290, "MK052"  },
+    { "UU","UU102", "RUN","320",  450,   530, "UU103"  },
+    { "MK","MK249", "RUN","AT7",  470,   555, "MK250"  },
+    { "6E","6E1861","BLR","32N",  510,   600, "6E1862" },
+    { "AI","AI2241","BOM","32N",  515,   610, "AI2242" },
+    { "EK","EK701", "DXB","77W",  565,   700, "EK702"  },
+    { "MK","MK047", "JNB","332",  520,   620, "MK048"  },
+    { "MK","MK201", "RRG","AT7",  545,   630, "MK202"  },
+    { "4Z","4Z252", "JNB","E90",  580,   665, "4Z253"  },
+    { "TK","TK741", "IST","789",  610,  1315, "TK742"  },
+    { "MK","MK203", "RRG","AT7",  640,   725, "MK204"  },
+    { "SS","SS910", "ORY","332",  655,  1330, "SS911"  },
+    { "MK","MK041", "BOM","339",  670,  1250, "MK042"  },
+    { "HM","HM062", "SEZ","320",  700,   790, "HM063"  },
+    { "MK","MK205", "RRG","AT7",  725,   810, "MK206"  },
+    { "MD","MD731", "TNR","AT7",  745,   835, "MD732"  },
+    { "UU","UU974", "RUN","320",  770,   855, "UU975"  },
+    { "WK","WK340", "ZRH","333",  795,  1275, "WK341"  },
+    { "MK","MK051", "TNR","AT7",  815,   900, "MK054"  },
+    { "MK","MK045", "CPT","332",  840,   935, "MK046"  },
+    { "4Y","4Y100", "FRA","333",  865,  1295, "4Y101"  },
+    { "MK","MK207", "RRG","AT7",  890,   975, "MK208"  },
+    { "FA","FA351", "JNB","738",  915,  1000, "FA352"  },
+    { "MK","MK043", "DEL","339",  940,  1265, "MK044"  },
+    { "UU","UU976", "RUN","320",  965,  1050, "UU977"  },
+    { "DE","DE2314","MUC","333",  990,  1305, "DE2315" },
+    { "MK","MK209", "RRG","AT7", 1015,  1100, "MK210"  },
+    { "SV","SV831", "JED","789", 1040,  1320, "SV832"  },
+    { "2W","2W121", "MAD","332", 1065,  1285, "2W122"  },
+    { "MK","MK211", "RRG","AT7", 1090,  1175, "MK212"  },
+    { "BA","BA2065","LGW","789", 1115,  1345, "BA2066" },
+    { "OS","OS035", "VIE","789", 1140,  1300, "OS036"  },
+    { "MK","MK017", "CDG","359", 1165,  1335, "MK016"  },
+    { "AZ","AZ852", "FCO","333", 1190,  1325, "AZ853"  },
+    { "MK","MK031", "KUL","339", 1215,  1385, "MK032"  },
+    { "E9","E9312", "MAD","332", 1240,  1355, "E9313"  },
+    { "MK","MK055", "PER","332", 1265,  1420, "MK056"  },
+    { "MK","MK213", "RRG","AT7", 1290,  1375, "MK214"  },
 };
+
+
+/* --------------------------------------------------------------------------
+ *  Slot coordination.
+ *
+ *  Plaisance has one runway, so two movements cannot be published four
+ *  minutes apart and both happen.  A real timetable is slot-coordinated
+ *  before it is published: where two movements are too close, the later one
+ *  is pushed back until it fits.
+ *
+ *  Doing this to the *scheduled* times matters.  It means the published day
+ *  is feasible, and it means that when a runway conflict does appear it is
+ *  news -- caused by a delay somebody can act on, rather than by a timetable
+ *  that never worked in the first place.
+ * ------------------------------------------------------------------------- */
+
+#define RWY_MIN_GAP 5            /* minutes between published movements     */
+
+static void deconflict_runway(int *minutes, int n)
+{
+    if (n < 2) return;
+
+    int order[MAX_FLIGHTS];
+    if (n > MAX_FLIGHTS) n = MAX_FLIGHTS;
+    for (int i = 0; i < n; i++) order[i] = i;
+    for (int i = 1; i < n; i++) {
+        int k = order[i], j = i - 1;
+        while (j >= 0 && minutes[order[j]] > minutes[k]) {
+            order[j+1] = order[j]; j--;
+        }
+        order[j+1] = k;
+    }
+
+    for (int i = 1; i < n; i++) {
+        int prev = minutes[order[i-1]];
+        int cur  = minutes[order[i]];
+        if (cur - prev < RWY_MIN_GAP) minutes[order[i]] = prev + RWY_MIN_GAP;
+    }
+}
+
+/* --------------------------------------------------------------------------
+ *  Which days of the week a rotation operates.
+ *
+ *  A published timetable is weekly, not daily.  The Rodrigues and Reunion
+ *  shuttles run every day; the Air Mauritius long-haul rotations four to six
+ *  times a week; the foreign carriers two to six.  Deriving the pattern from
+ *  a hash of the flight number keeps it stable for the whole season -- the
+ *  same route always operates on the same weekdays -- without a frequency
+ *  column having to be maintained by hand for every row in the table.
+ * ------------------------------------------------------------------------- */
+
+static unsigned route_days(const RouteRow *r)
+{
+    uint32_t h = 2166136261u;
+    for (const char *p = r->num; *p; p++) {
+        h ^= (uint32_t)(unsigned char)*p;
+        h *= 16777619u;
+    }
+
+    int freq;
+    if (strcmp(r->ap, "RRG") == 0 || strcmp(r->ap, "RUN") == 0) freq = 7;
+    else if (strcmp(r->ac, "AT7") == 0)                         freq = 7;
+    else if (strcmp(r->al, "MK")  == 0)                         freq = 4 + (int)(h % 3u);
+    else                                                        freq = 2 + (int)(h % 5u);
+    if (freq > 7) freq = 7;
+
+    unsigned mask = 0;
+    uint32_t x = h | 1u;
+    for (int placed = 0; placed < freq; ) {
+        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+        unsigned d = x % 7u;
+        if (!(mask & (1u << d))) { mask |= 1u << d; placed++; }
+    }
+    return mask;
+}
 
 static void gen_flight(World *w, const RouteRow *r, int arrival, int *idc,
                        const char *reg)
@@ -595,7 +837,16 @@ static void gen_flight(World *w, const RouteRow *r, int arrival, int *idc,
 
     const AcType *t = &w->actype[f->acType];
     f->paxCap = t->seats;
-    float load = rnd_range(&w->rng, 0.62f, 0.97f);
+    /* Southern summer and the European holidays fill the aeroplanes; May and
+     * June are the shoulder.  The same route in a different month carries a
+     * visibly different load, which is half the point of holding a schedule
+     * three months long rather than a single day. */
+    float season = (w->month == 12 || w->month == 1 ||
+                    w->month == 7  || w->month == 8) ?  0.09f
+                 : (w->month == 5  || w->month == 6) ? -0.07f : 0.f;
+    float load = rnd_range(&w->rng, 0.62f, 0.97f) + season;
+    if (load < 0.45f) load = 0.45f;
+    if (load > 0.99f) load = 0.99f;
     f->pax    = (int)(t->seats * load);
     f->bags   = (int)(f->pax * rnd_range(&w->rng, 0.55f, 1.35f));
 
@@ -607,8 +858,30 @@ static void gen_flight(World *w, const RouteRow *r, int arrival, int *idc,
     f->estMin = f->schedMin + f->delayMin;
 
     if (arrival) {
-        const char *belts[] = { "1","2","3","4","5" };
-        snprintf(f->belt, 4, "%s", belts[rnd_int(&w->rng, 0, 4)]);
+        /* Plaisance quotes reclaim belts in pairs for the wide-bodies, which
+         * is what the arrivals board actually displays. */
+        const char *wide[]  = { "02-03", "04-05", "06-07" };
+        const char *narrow[] = { "01", "03", "06", "08" };
+        if (w->actype[f->acType].widebody)
+            snprintf(f->belt, sizeof f->belt, "%s", wide[rnd_int(&w->rng, 0, 2)]);
+        else
+            snprintf(f->belt, sizeof f->belt, "%s", narrow[rnd_int(&w->rng, 0, 3)]);
+
+        /* Codeshares: one aeroplane sold under several numbers.  The live
+         * boards list every marketing carrier against the same movement. */
+        struct { const char *op, *dest, *share; } CS[] = {
+            { "MK","CDG","AF7964" }, { "MK","CDG","KL3848" },
+            { "MK","RUN","AF7945" }, { "MK","RUN","AI6727" },
+            { "KQ","NBO","MK963"  }, { "MK","JNB","4Z8043" },
+            { "MK","BOM","AI7132" }, { "AF","CDG","MK9015" },
+            { "MK","LGW","BA6742" }, { "UU","RUN","MK9102" },
+        };
+        for (int k = 0; k < (int)(sizeof CS/sizeof CS[0]) && f->nShares < 3; k++) {
+            if (strcmp(w->airline[f->airline].iata, CS[k].op) != 0) continue;
+            if (strcmp(w->airport[f->airport].iata, CS[k].dest) != 0) continue;
+            snprintf(f->shares[f->nShares], 8, "%s", CS[k].share);
+            f->nShares++;
+        }
     } else {
         f->nDesks = t->widebody ? 4 : 2;
         int base = 1 + (w->nFlights * 3) % 20;
@@ -674,9 +947,15 @@ static void assign_stands(World *w)
 
         float span = w->actype[f->acType].wingspan;
         int best = -1;
+        /* Two passes: passenger stands first, and only if the whole apron is
+         * committed does a cargo hardstand get used.  Testing cargo inside a
+         * single pass makes its use depend on array order rather than on
+         * there genuinely being nothing else free. */
+        for (int pass = 0; pass < 2 && best < 0; pass++)
         for (int s = 0; s < w->nStands; s++) {
             Stand *st = &w->stand[s];
-            if (st->kind == ST_CARGO) continue;
+            if (pass == 0 && st->kind == ST_CARGO) continue;
+            if (pass == 1 && st->kind != ST_CARGO) continue;
             if (st->maxSpan < span)   continue;
             if (busyUntil[s] > from)  continue;
             if (best < 0) { best = s; continue; }
@@ -719,10 +998,47 @@ static void gen_passengers(World *w)
             }
             p->pnr[6] = 0;
             p->flight = f->id;
-            int row = rnd_int(&w->rng, 1, w->actype[f->acType].widebody ? 58 : 32);
+            /*  Draw a seat, but check nobody on this flight already has it.
+             *  A random draw alone collides far more often than it feels
+             *  like it should -- with fourteen passengers over a hundred
+             *  and ninety seats it is about even money per flight -- and
+             *  two people holding 12B is a real error, not a cosmetic one. */
             const char *cols = "ABCDEFGHJK";
-            int nc = w->actype[f->acType].widebody ? 9 : 6;
-            snprintf(p->seat, 5, "%d%c", row, cols[rnd_int(&w->rng, 0, nc-1)]);
+            int rows = w->actype[f->acType].widebody ? 58 : 32;
+            int nc   = w->actype[f->acType].widebody ?  9 :  6;
+            int placed = 0;
+            for (int attempt = 0; attempt < 60 && !placed; attempt++) {
+                char cand[5];
+                snprintf(cand, sizeof cand, "%d%c",
+                         rnd_int(&w->rng, 1, rows),
+                         cols[rnd_int(&w->rng, 0, nc-1)]);
+                int taken = 0;
+                for (int q = 0; q < w->nPax - 1; q++)
+                    if (w->pax[q].flight == f->id &&
+                        strcmp(w->pax[q].seat, cand) == 0) { taken = 1; break; }
+                if (!taken) {
+                    snprintf(p->seat, sizeof p->seat, "%s", cand);
+                    placed = 1;
+                }
+            }
+            if (!placed) {
+                /* the random draw kept losing: walk the cabin instead */
+                for (int r = 1; r <= rows && !placed; r++)
+                    for (int ci = 0; ci < nc && !placed; ci++) {
+                        char cand[5];
+                        snprintf(cand, sizeof cand, "%d%c", r, cols[ci]);
+                        int taken = 0;
+                        for (int q = 0; q < w->nPax - 1; q++)
+                            if (w->pax[q].flight == f->id &&
+                                strcmp(w->pax[q].seat, cand) == 0) {
+                                taken = 1; break;
+                            }
+                        if (!taken) {
+                            snprintf(p->seat, sizeof p->seat, "%s", cand);
+                            placed = 1;
+                        }
+                    }
+            }
             p->bags       = rnd_int(&w->rng, 0, 2);
             p->nationality= rnd_int(&w->rng, 0, w->nAirports - 1);
             p->loyalty    = (rnd_f(&w->rng) > 0.80f)
@@ -730,7 +1046,55 @@ static void gen_passengers(World *w)
             p->fastTrack  = p->loyalty >= 2;
             p->wheelchair = rnd_f(&w->rng) > 0.955f;
             p->infant     = rnd_f(&w->rng) > 0.93f;
+
+            /*  Special assistance.  Roughly one passenger in twenty asks for
+             *  something, which is what a station this size actually files;
+             *  the wheelchair flag and the assistance code are kept
+             *  consistent so the two never disagree on screen.             */
+            float sr = rnd_f(&w->rng);
+            if (p->wheelchair)   p->assist = AS_WHEELCHAIR;
+            else if (sr > 0.975f) p->assist = AS_MOBILITY;
+            else if (sr > 0.968f) p->assist = AS_VISUAL;
+            else if (sr > 0.961f) p->assist = AS_HEARING;
+            else if (sr > 0.955f) p->assist = AS_MINOR;
+            else if (sr > 0.950f) p->assist = AS_MEDICAL;
+            else                  p->assist = AS_NONE;
+            if (p->assist == AS_WHEELCHAIR) p->wheelchair = 1;
         }
+    }
+}
+
+/*  Connecting passengers.
+ *
+ *  Plaisance is a hub for the Indian Ocean: a passenger off the Paris or
+ *  Dubai widebody in the morning may be leaving again on the Rodrigues or
+ *  Reunion turboprop the same afternoon.  Marking those passengers matters
+ *  because their bag has to be found and re-tagged, and because if the
+ *  inbound is late they are the ones who miss the onward flight.
+ * ------------------------------------------------------------------------- */
+static void gen_connections(World *w)
+{
+    for (int i = 0; i < w->nPax; i++) {
+        Passenger *p = &w->pax[i];
+        Flight *out = flight_by_id(w, p->flight);
+        if (!out || out->arrival) continue;
+        if (rnd_f(&w->rng) > 0.22f) continue;      /* about one in five      */
+
+        /*  Find an arrival that lands early enough to make the connection
+         *  and not so early that it would be a day trip.  The minimum
+         *  connecting time at Plaisance is 60 minutes for international.  */
+        int best = -1, bestGap = 0;
+        for (int k = 0; k < w->nFlights; k++) {
+            Flight *in = &w->flight[k];
+            if (!in->arrival || in->state == FS_CANCELLED) continue;
+            if (in->airport == out->airport) continue;   /* not straight back */
+            int gap = out->estMin - in->estMin;
+            if (gap < 60 || gap > 420) continue;
+            if (best < 0 || gap < bestGap) { best = k; bestGap = gap; }
+        }
+        if (best < 0) continue;
+        p->connFlight = w->flight[best].id;
+        p->connMin    = bestGap;
     }
 }
 
@@ -765,6 +1129,54 @@ static void gen_bags(World *w)
     }
 }
 
+/* --------------------------------------------------------------------------
+ *  Optional local roster.
+ *
+ *  data/roster.csv, one name per line, overrides the generated names.  It is
+ *  deliberately git-ignored: a demonstrator can put a real list of people in
+ *  it for a presentation without those names ever entering the repository.
+ *  If the file is absent the generated Mauritian roster is used unchanged.
+ * ------------------------------------------------------------------------- */
+
+int world_load_roster(World *w, const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+
+    char line[128];
+    int applied = 0;
+    while (applied < w->nPax && fgets(line, sizeof line, f)) {
+        size_t n = strlen(line);
+        while (n && (line[n-1] == '\n' || line[n-1] == '\r' ||
+                     line[n-1] == ' '  || line[n-1] == '\t')) line[--n] = 0;
+        char *p = line;
+        while (*p == ' ' || *p == '\t') p++;
+        if (!*p || *p == '#') continue;              /* blank or comment    */
+        /* accept "Surname, First" as well as "First Surname" */
+        char *comma = strchr(p, ',');
+        if (comma) {
+            /* sized so the pair always fits the 38-byte name field */
+            char sur[18], first[18];
+            size_t sl = (size_t)(comma - p);
+            if (sl > sizeof sur - 1) sl = sizeof sur - 1;
+            memcpy(sur, p, sl); sur[sl] = 0;
+            char *q = comma + 1;
+            while (*q == ' ') q++;
+            snprintf(first, sizeof first, "%s", q);
+            snprintf(w->pax[applied].name, sizeof w->pax[applied].name,
+                     "%s %s", first, sur);
+        } else {
+            snprintf(w->pax[applied].name, sizeof w->pax[applied].name, "%s", p);
+        }
+        applied++;
+    }
+    fclose(f);
+    if (applied)
+        world_log(w, LG_INFO, "Passenger roster: %d names loaded from %s",
+                  applied, path);
+    return applied;
+}
+
 static void gen_staff(World *w)
 {
     for (int i = 0; i < MAX_STAFF; i++) {
@@ -792,11 +1204,41 @@ static void gen_desks(World *w)
     }
 }
 
-void world_generate(World *w)
+/* ==========================================================================
+ *  a day of operations
+ *
+ *  The programme runs for ninety-two days and none of it is stored: a date
+ *  seeds the generator, the generator produces that date's flights, and the
+ *  same date always produces the same day again.  That is what makes it a
+ *  schedule rather than a random shuffle -- a passenger can be told their
+ *  flight leaves at 20:35 three weeks from now and it still will.
+ * ========================================================================== */
+
+void world_generate_day(World *w, long epochDay)
 {
+    int y, m, d;
+    civil_from_days(epochDay, &y, &m, &d);
+    int wd = weekday_of(epochDay);
+
+    /* the date is the seed, so the day is reproducible from nothing else */
+    w->epochDay = epochDay;
+    w->day = d; w->month = m; w->year = y; w->weekday = wd;
+    w->rng = ((uint32_t)epochDay * 2654435761u) ^ 0xA17C0DEu;
+    for (int i = 0; i < 8; i++) (void)rnd_f(&w->rng);   /* let it settle */
+
+    w->nFlights = 0;
+    w->nPax     = 0;
+    w->nBags    = 0;
+    w->nStaff   = 0;
+    w->nDesks   = 0;
+    w->totalDepartures = w->totalArrivals = 0;
+    w->bagsMishandled  = w->securityAlerts = 0;
+
     int idc = 1;
     int n = (int)(sizeof ROUTES / sizeof ROUTES[0]);
     for (int i = 0; i < n; i++) {
+        if (!(route_days(&ROUTES[i]) & (1u << wd))) continue;   /* not today */
+
         char reg[10];
         int airline = al_index(w, ROUTES[i].al);
         /* keep drawing until this tail is not already flying today */
@@ -810,8 +1252,22 @@ void world_generate(World *w)
         gen_flight(w, &ROUTES[i], 1, &idc, reg);
         gen_flight(w, &ROUTES[i], 0, &idc, reg);
     }
+
+    /*  Space the published times before anything is allocated: the stand
+     *  plan, the passenger timings and the baggage release all key off
+     *  estMin, so the slots have to be settled first.                      */
+    int slot[MAX_FLIGHTS];
+    for (int i = 0; i < w->nFlights; i++) slot[i] = w->flight[i].schedMin;
+    deconflict_runway(slot, w->nFlights);
+    for (int i = 0; i < w->nFlights; i++) {
+        w->flight[i].schedMin = slot[i];
+        w->flight[i].estMin   = slot[i] + w->flight[i].delayMin;
+        while (w->flight[i].estMin >= 1440) w->flight[i].estMin -= 1440;
+    }
+
     assign_stands(w);
     gen_passengers(w);
+    gen_connections(w);
     gen_bags(w);
     gen_staff(w);
     gen_desks(w);
@@ -820,7 +1276,85 @@ void world_generate(World *w)
     w->totalBagsToday = w->nBags;
     for (int i = 0; i < w->nFlights; i++) w->totalPaxToday += w->flight[i].pax;
 
-    world_log(w, LG_OK, "AURA operations core online -- %d movements loaded",
-              w->nFlights);
-    world_log(w, LG_INFO, "Runway 14 in use, wind 135/12kt, QNH 1017");
+    world_load_roster(w, "data/roster.csv");
+}
+
+void world_generate(World *w)
+{
+    world_generate_day(w, w->epochDay);
+
+    world_log(w, LG_OK,
+              "AURA operations core online -- %d movements for %s %d %s %d",
+              w->nFlights, weekday_name(w->weekday), w->day,
+              month_name(w->month), w->year);
+    world_log(w, LG_INFO, "Runway %02d in use, wind 135/12kt, QNH 1017",
+              w->activeRunway);
+}
+
+/* --------------------------------------------------------------------------
+ *  Looking ahead.
+ *
+ *  These read the same weekly patterns as the generator but touch nothing,
+ *  so any of the ninety-two days can be shown without disturbing the day the
+ *  airport is actually running.
+ * ------------------------------------------------------------------------- */
+
+int schedule_movements(const World *w, long epochDay)
+{
+    int wd = weekday_of(epochDay), n = 0;
+    int nr = (int)(sizeof ROUTES / sizeof ROUTES[0]);
+    (void)w;
+    for (int i = 0; i < nr; i++)
+        if (route_days(&ROUTES[i]) & (1u << wd)) n += 2;
+    return n;
+}
+
+int schedule_for_day(const World *w, long epochDay, SchedRow *out, int max)
+{
+    int wd = weekday_of(epochDay), n = 0;
+    int nr = (int)(sizeof ROUTES / sizeof ROUTES[0]);
+
+    for (int i = 0; i < nr && n < max; i++) {
+        if (!(route_days(&ROUTES[i]) & (1u << wd))) continue;
+
+        int ai = -1, al = 0;
+        for (int k = 0; k < w->nAirports; k++)
+            if (strcmp(w->airport[k].iata, ROUTES[i].ap) == 0) { ai = k; break; }
+        for (int k = 0; k < w->nAirlines; k++)
+            if (strcmp(w->airline[k].iata, ROUTES[i].al) == 0) { al = k; break; }
+
+        for (int leg = 0; leg < 2 && n < max; leg++) {
+            SchedRow *r = &out[n++];
+            /* cleared, not just filled: the unused tail of every character
+             * array would otherwise be whatever was on the stack, and two
+             * identical days would not compare equal */
+            memset(r, 0, sizeof *r);
+            snprintf(r->no, sizeof r->no, "%s",
+                     leg ? ROUTES[i].depNum : ROUTES[i].num);
+            r->arrival  = (leg == 0);
+            r->schedMin = leg ? ROUTES[i].depMin : ROUTES[i].arrMin;
+            r->airline  = al;
+            snprintf(r->ac, sizeof r->ac, "%s", ROUTES[i].ac);
+            snprintf(r->destIata, sizeof r->destIata, "%s", ROUTES[i].ap);
+            snprintf(r->dest, sizeof r->dest, "%s",
+                     ai >= 0 ? w->airport[ai].city : ROUTES[i].ap);
+        }
+    }
+
+    /* in time order, the way a published timetable reads */
+    for (int i = 1; i < n; i++) {
+        SchedRow t = out[i];
+        int j = i - 1;
+        while (j >= 0 && out[j].schedMin > t.schedMin) { out[j+1] = out[j]; j--; }
+        out[j+1] = t;
+    }
+
+    /*  Slot-coordinated with exactly the same rule the live day uses, so the
+     *  forward timetable and the day it turns into agree to the minute.    */
+    int slot[MAX_FLIGHTS];
+    int m = n > MAX_FLIGHTS ? MAX_FLIGHTS : n;
+    for (int i = 0; i < m; i++) slot[i] = out[i].schedMin;
+    deconflict_runway(slot, m);
+    for (int i = 0; i < m; i++) out[i].schedMin = slot[i];
+    return n;
 }

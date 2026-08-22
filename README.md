@@ -10,10 +10,24 @@ University of Mauritius.
 
 ## What this is
 
-AURA is an airport operations application. It runs a live simulation of a full
-operating day at Plaisance — 72 movements, 14 airlines, 33 destinations, 22
-stands, ~360 passengers and ~370 bags — and gives the operations floor seven
-working screens over that state, plus five decision-support engines.
+AURA is an airport operations application for Plaisance. It opens on the real
+Mauritius clock and runs the day the airport is actually having: around 56 to
+66 movements, 23 airlines, 33 destinations, 28 stands and the passengers and
+bags that go with them, across ten working screens and five decision-support
+engines.
+
+**It runs in real time.** There is no simulation speed and no pause. The clock
+is the host machine's clock shifted to UTC+4, so a departure boards when it
+boards and the board clears a flight when it has gone. At midnight the
+programme rolls over to the next day on its own.
+
+**The programme runs ninety-two days.** Every route carries a weekly operating
+pattern and every date seeds its own generator, so any day in the next three
+months has its own schedule, loads and delays — reproducibly, without a byte
+of it being stored. The **Schedule** tab on the Movements screen browses it.
+
+**It is access-controlled.** Nothing opens until an address on the authorised
+staff list has signed in; see *Staff access* below.
 
 It is a real Win32 application: one window, one 32-bit back buffer, and a
 software rasteriser written from scratch. There is no game engine, no web
@@ -56,16 +70,65 @@ gcc -O2 -std=c11 -Iinclude -Isrc src/main.c src/engine/*.c src/core/*.c ^
 
 | Key | Action |
 |-----|--------|
-| `1`–`7` | switch screen |
-| `Space` | pause / resume the simulation clock |
-| `F` | cycle clock speed (×1 → ×4 → ×8 → ×20 → ×60) |
+| `1`–`9`, `0` | reach the first ten screens (the sidebar scrolls to the rest) |
 | `A` | open the AURA assistant dock |
 | `S` | write all records to disk |
+| `L` | lock the console |
 | `Esc` | close the open panel |
+| `Enter` | submit, on the sign-in screen |
+
+There is deliberately no pause and no fast-forward. The clock is the machine's
+own clock, so neither would be telling the truth about what the system does.
 
 The mouse works everywhere: drag the airfield to pan, scroll to zoom, click an
 aircraft or a stand to select it, click a bag on the belt to trace it, click a
 check-in desk to open or close it.
+
+### What it does
+
+| # | Feature | Where |
+|---|---------|-------|
+| 1 | Flight management -- add, retime, restatus, cancel, search | Operations |
+| 2 | Passenger registration, check-in, automatic seat allocation | Check-in |
+| 3 | Gate assignment, conflict detection, alternative gate | Operations -> Gates |
+| 4 | Baggage register, tracking, overweight, lost bag claims | Baggage, Resources |
+| 5 | Security and boarding queues (a real FIFO queue ADT) | Check-in |
+| 6 | Emergencies, severity levels, response protocols | Emergency |
+| 7 | Delay impact -- a late flight's knock-on, and the fix | Operations -> Gates |
+| 8 | Runway occupancy, separation, next clear slot | Operations -> Runway |
+| 9 | Passenger notifications, raised automatically | Emergency |
+| 10 | Analytics -- movements, punctuality, busiest gate, load | Analytics |
+| 11-13 | Aircraft types, staff roster, shift coverage | Resources |
+| 14 | Lost and found | Resources |
+| 15 | Special assistance (IATA service codes) | Resources |
+| 16 | Connecting passengers | Welcome, Check-in |
+| 17-19 | Flight, passenger and baggage search | Operations, Check-in, Baggage |
+| 20 | Departure and arrival board (split-flap) | Movements |
+| 21-24 | Parking, shops and dining, lounge, transport | Services |
+| -- | Passenger reviews by service | Reviews |
+| -- | Live airfield, computer vision, five AI engines | Airfield, Surveillance, AI Suite |
+
+### Accounts
+
+Registration is open. Anyone — a traveller or a member of staff — creates an
+account with whatever email address they already use and sets their own
+password. There is no invitation list.
+
+* **Any address works.** Nothing is sent anywhere; the account is local.
+* Tick *Airport staff* at registration and the console opens on Operations
+  instead of the Welcome screen. Neither kind is locked out of anything.
+* Only a per-account random salt and a SHA-256 digest, iterated 100,000
+  times, are written to `data/accounts.dat` (git-ignored). **The password
+  itself is never stored and cannot be recovered from that file.**
+* Five wrong attempts lock the terminal for 45 seconds. Every attempt, and
+  every sign-in and sign-out, is written to `data/journal.log`.
+* Forgotten password: delete `data/accounts.dat` and register again.
+
+This is a local account system, and it is honest about being one. It is not
+Google sign-in: federated sign-in needs a browser, a network round trip and a
+client secret, and a self-contained C application with no third-party
+libraries has none of those. It also protects the application, not the disk —
+it will not stop somebody who already has the machine.
 
 ---
 
@@ -156,7 +219,13 @@ src/core/                    MODULE B — domain and persistence
   model.h/.c                 airlines, aircraft, airports, stands, flights,
                              passengers, bags, staff; day generation
   store.h/.c                 CSV persistence, journal, report export
-  sim.h/.c                   the live simulation
+  sim.h/.c                   the live operation, driven by the real clock
+  auth.h/.c                  accounts: SHA-256, per-account salt, iteration
+  queue.h/.c                 the FIFO queue ADT, with a priority lane
+  ops.h/.c                   flights, gates, conflicts, runway, passengers
+  incident.h/.c              emergencies and passenger notifications
+  feedback.h/.c              reviews and lost property
+  analytics.h/.c             the operational report
 
 src/ai/                      MODULE C — decision support
   ai.h                       the contract for all five engines
