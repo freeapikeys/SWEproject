@@ -25,20 +25,32 @@ typedef struct {
     const char *mode, *route, *detail;
     int   icon;
     int   everyMin;        /* headway, 0 for on-demand                       */
+    int   firstMin, lastMin;/* service hours; 0,0 = round the clock          */
     float fareMin, fareMax;/* rupees                                         */
 } Transport;
 
+/*  The scheduled buses do not run through the night -- the last Port Louis
+ *  service is at 22:00 and the last Curepipe one at 20:00 -- so their next
+ *  departure has to be shown against the real clock, not blindly counted off
+ *  it.  Only the taxi rank and the pre-booked transfers are round the clock.
+ *  (This is the fix for a night-time board that promised a bus in ten
+ *  minutes when the last one had left hours earlier.)                       */
 static const Transport TRANSPORT[] = {
     { "Bus",            "Port Louis  -  Airport",
-      "Airport Terminal Operations Ltd, via Mahebourg", IC_TRUCK, 30, 40.f, 60.f },
+      "Airport Terminal Operations Ltd, via Mahebourg", IC_TRUCK, 30,
+      5*60, 22*60, 40.f, 60.f },
     { "Bus",            "Curepipe  -  Airport",
-      "Regular service via the Royal Road",             IC_TRUCK, 45, 35.f, 50.f },
+      "Regular service via the Royal Road",             IC_TRUCK, 45,
+      5*60 + 30, 20*60, 35.f, 50.f },
     { "Taxi",           "Metered, kerbside",
-      "Rank outside Arrivals, Level 0",                 IC_TRUCK,  0, 900.f, 2200.f },
+      "Rank outside Arrivals, Level 0 -- 24 hours",     IC_TRUCK,  0,
+      0, 0, 900.f, 2200.f },
     { "Hotel shuttle",  "Grand Baie / Flic-en-Flac / Belle Mare",
-      "Pre-booked through the hotel",                   IC_TRUCK,  0, 0.f, 0.f },
+      "Pre-booked through the hotel",                   IC_TRUCK,  0,
+      0, 0, 0.f, 0.f },
     { "VIP transfer",   "Private vehicle, meet and greet",
-      "Booked with the fast track product",             IC_USER,   0, 2500.f, 4500.f },
+      "Booked with the fast track product",             IC_USER,   0,
+      0, 0, 2500.f, 4500.f },
 };
 #define NTRANSPORT ((int)(sizeof TRANSPORT / sizeof TRANSPORT[0]))
 
@@ -90,18 +102,28 @@ static void panel_transport(App *a, float x, float y, float w, float h)
         tx_clipped(c, t->detail, x + 58.f, ry + 33.f, w - 180.f,
                    font_make(TF_UI, 10, TW_REG), C_INK_3, AL_L, AV_T);
 
-        /* next departure, counted off the simulation clock */
-        char right[32];
+        /* next departure, against the real clock and the service hours */
+        char right[40];
+        right[0] = 0;
         if (t->everyMin > 0) {
-            int mins = t->everyMin - ((int)a->w.clock % t->everyMin);
-            snprintf(right, sizeof right, "in %d min", mins);
-            tx_draw(c, right, x + w - 18.f, ry + 2.f,
-                    font_make(TF_UI, 12, TW_BOLD), C_OK, AL_R, AV_T);
-            snprintf(right, sizeof right, "every %d min", t->everyMin);
+            int now = (int)a->w.clock;
+            int running = (now >= t->firstMin && now < t->lastMin);
+            if (running) {
+                int mins = t->everyMin - (now % t->everyMin);
+                char nxt[24]; snprintf(nxt, sizeof nxt, "in %d min", mins);
+                tx_draw(c, nxt, x + w - 18.f, ry + 2.f,
+                        font_make(TF_UI, 12, TW_BOLD), C_OK, AL_R, AV_T);
+                snprintf(right, sizeof right, "every %d min", t->everyMin);
+            } else {
+                /* closed for the night: show when the first bus runs */
+                char hm[8]; fmt_hhmm(t->firstMin, hm);
+                tx_draw(c, "not running", x + w - 18.f, ry + 2.f,
+                        font_make(TF_UI, 12, TW_BOLD), C_INK_4, AL_R, AV_T);
+                snprintf(right, sizeof right, "first bus %s", hm);
+            }
         } else {
             tx_draw(c, "on demand", x + w - 18.f, ry + 2.f,
                     font_make(TF_UI, 12, TW_BOLD), C_V600, AL_R, AV_T);
-            right[0] = 0;
         }
         if (right[0])
             tx_draw(c, right, x + w - 18.f, ry + 20.f,

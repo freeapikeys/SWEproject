@@ -40,12 +40,32 @@ static void draw_search_hall(App *a, float x, float y, float w, float h)
     tx_draw(c, "CENTRAL SEARCH", x + 18.f, y + 14.f,
             font_track(TF_UI, 10, TW_BOLD, 2), col_alpha(HEX(0xFFFFFF), .9f),
             AL_L, AV_T);
-    char sub[90];
+    /*  Throughput -- how many passengers clear per minute -- is the number
+     *  a duty manager actually watches, so it goes next to the wait.  Each
+     *  lane processes one passenger about every twelve seconds.            */
+    float perMin = (float)m->lanesOpen * (60.f / 12.f);
+    char sub[120];
     snprintf(sub, sizeof sub,
-             "%d lanes open   -   %.0f min wait   -   %.0f%% utilisation",
-             m->lanesOpen, m->waitNow, m->utilisation*100.f);
+             "%d lanes open   -   %.0f min wait   -   ~%.0f clearing per minute"
+             "   -   %.0f%% busy",
+             m->lanesOpen, m->waitNow, perMin, m->utilisation*100.f);
     tx_draw(c, sub, x + 18.f, y + 32.f, font_make(TF_UI, 11, TW_MED),
             col_alpha(C_V200, .72f), AL_L, AV_T);
+
+    /* a small legend so the hall reads without a manual */
+    struct { const char *t; Color col; } FL[3] = {
+        { "open lane", C_TEAL }, { "waiting", C_V300 }, { "airside", C_OK } };
+    float lgx = x + w - 16.f;
+    for (int i = 2; i >= 0; i--) {
+        Font lf = font_make(TF_UI, 10, TW_SEMI);
+        float tw2 = (float)tx_width(c, FL[i].t, lf);
+        lgx -= tw2;
+        tx_draw(c, FL[i].t, lgx, y + 16.f, lf, col_alpha(HEX(0xFFFFFF), .7f),
+                AL_L, AV_T);
+        lgx -= 10.f;
+        cv_circle(c, lgx, y + 21.f, 4.f, FL[i].col);
+        lgx -= 14.f;
+    }
 
     int lanes = m->lanesOpen;
     if (lanes < 1) lanes = 1;
@@ -89,6 +109,12 @@ static void draw_search_hall(App *a, float x, float y, float w, float h)
         /* the queue behind it */
         int q = totalQ / lanes + ((L < (totalQ % lanes)) ? 1 : 0);
         int show = q > 14 ? 14 : q;
+
+        /* an OPEN marker and this lane's own count, so closing one reads */
+        char lq[20]; snprintf(lq, sizeof lq, "OPEN  -  %d", q);
+        tx_backdrop(C_NIGHT_2);
+        tx_draw(c, lq, lx, archY + 44.f, font_make(TF_UI, 9, TW_SEMI),
+                col_alpha(C_TEAL, .85f), AL_C, AV_M);
         for (int k = 0; k < show; k++) {
             float fy = archY + 62.f + k*20.f;
             if (fy > bottom - 8.f) break;

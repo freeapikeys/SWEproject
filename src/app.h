@@ -141,6 +141,9 @@ typedef struct {
     char   ciName[38];
     int    ciFlight;           /* flight id for the new passenger           */
 
+    /* welcome screen: one-shot match of the signed-in traveller's booking */
+    int    welcomeMatched;
+
     /* text buffers */
     char   chatInput[220];
     char   searchBoard[64];
@@ -159,6 +162,7 @@ typedef struct {
     int    bagAutoInject;
     float  bagInjectT;
     int    bagFocus;
+    int    bagIdentify;        /* CV-style per-bag tracking overlay          */
 
     /* flow */
     float  flowTimer;
@@ -210,5 +214,8 @@ const char *ordinal_gate(int gate, char *buf);
 /* shared by several screens: a row of stars, and a service rating pill */
 void draw_stars(Canvas *c, float x, float y, float size, float value,
                 int outOf, Color on, Color off);
+
+/* the AURA badge -- sidebar, login and boot all draw the same mark */
+void draw_logo(Canvas *c, float cx, float cy, float r);
 
 #endif /* AURA_APP_H */

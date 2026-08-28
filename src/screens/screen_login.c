@@ -64,17 +64,10 @@ static void draw_brand(App *a, float x, float y, float w)
     Canvas *c  = &a->cv;
     World  *wo = &a->w;
 
-    Path fin; path_reset(&fin);
-    path_move(&fin, x,        y + 58.f);
-    path_line(&fin, x + 23.f, y);
-    path_line(&fin, x + 42.f, y);
-    path_line(&fin, x + 29.f, y + 58.f);
-    path_close(&fin);
-    Paint fg = paint_linear(x, y, x + 42.f, y + 58.f, C_V200, C_MAGENTA);
-    cv_fill(c, &fin, &fg, 1.f);
+    draw_logo(c, x + 30.f, y + 26.f, 26.f);
 
     tx_backdrop(C_V900);
-    tx_draw(c, "AURA", x + 58.f, y - 6.f, font_track(TF_DISPLAY, 54, TW_BOLD, 5),
+    tx_draw(c, "AURA", x + 76.f, y - 6.f, font_track(TF_DISPLAY, 54, TW_BOLD, 5),
             HEX(0xFFFFFF), AL_L, AV_T);
     tx_draw(c, "AIRPORT UNIFIED RESOURCE ADMINISTRATION", x, y + 78.f,
             font_track(TF_UI, 10, TW_SEMI, 3), C_V200, AL_L, AV_T);
@@ -253,6 +246,7 @@ void screen_login(App *a, float sw, float sh)
                 /*  Staff open on the operations floor, travellers on their
                  *  own journey.  Neither is locked out of the other -- the
                  *  landing screen is a courtesy, not a permission.         */
+                a->welcomeMatched = 0; a->selPax = 0;
                 a->screen = (a->loginKind == ACC_STAFF) ? SC_OPS : SC_WELCOME;
                 store_journal(&a->w, "Account created");
                 store_journal(&a->w, "Signed in");
@@ -299,6 +293,7 @@ void screen_login(App *a, float sw, float sh)
                 if (auth_verify(au, a->loginEmail, a->loginPw)) {
                     memset(a->loginPw, 0, sizeof a->loginPw);
                     ui_focus_clear();
+                    a->welcomeMatched = 0; a->selPax = 0;
                     a->screen = (au->kind == ACC_STAFF) ? SC_OPS : SC_WELCOME;
                     store_journal(&a->w, "Signed in");
                     ui_toast(TOAST_OK, "Welcome back", au->name);

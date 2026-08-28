@@ -82,6 +82,52 @@ int  ui_cursor_hand(void)    { return g_cursorHand; }
 void ui_focus(uint64_t id)   { g_focus = id; }
 void ui_focus_clear(void)    { g_focus = 0; }
 int  ui_field_focused(uint64_t id) { return g_focus == id; }
+int  ui_any_field_focused(void)    { return g_focus != 0; }
+
+/* --------------------------------------------------------------------------
+ *  clipboard, for copy and paste in text fields
+ *
+ *  Windows only, which is all this application targets.  OpenClipboard(NULL)
+ *  is valid -- no window handle is needed -- so this can live in the widget
+ *  layer without reaching back into the application.
+ * ------------------------------------------------------------------------- */
+
+static void clip_set(const char *s)
+{
+    if (!s || !OpenClipboard(NULL)) return;
+    EmptyClipboard();
+    size_t n = strlen(s);
+    HGLOBAL h = GlobalAlloc(GMEM_MOVEABLE, n + 1);
+    if (h) {
+        char *dst = (char *)GlobalLock(h);
+        if (dst) {
+            memcpy(dst, s, n + 1);
+            GlobalUnlock(h);
+            SetClipboardData(CF_TEXT, h);
+        } else {
+            GlobalFree(h);
+        }
+    }
+    CloseClipboard();
+}
+
+static int clip_get(char *out, int cap)
+{
+    out[0] = 0;
+    if (!IsClipboardFormatAvailable(CF_TEXT) || !OpenClipboard(NULL)) return 0;
+    HGLOBAL h = GetClipboardData(CF_TEXT);
+    int n = 0;
+    if (h) {
+        const char *src = (const char *)GlobalLock(h);
+        if (src) {
+            while (n < cap - 1 && src[n]) { out[n] = src[n]; n++; }
+            out[n] = 0;
+            GlobalUnlock(h);
+        }
+    }
+    CloseClipboard();
+    return n;
+}
 
 int ui_hit(float x, float y, float w, float h)
 {
@@ -505,6 +551,26 @@ static int field_impl(uint64_t id, float x,float y,float w,float h,
         if (g_in->keyHit[VK_DELETE] && caret < len) {
             memmove(buf + caret, buf + caret + 1, (size_t)(len - caret));
             len--; changed = 1;
+        }
+
+        /*  Copy and paste.  A baggage tag or a booking reference is far more
+         *  often pasted from a boarding pass or an email than typed, so the
+         *  field has to accept Ctrl+V; Ctrl+C hands the current value back.
+         *  The control codes these chords also emit as WM_CHAR (^C = 3,
+         *  ^V = 22) are below 32 and were already filtered out above, so
+         *  nothing is inserted twice.  Secret fields never copy out. */
+        if (g_in->ctrl && g_in->keyHit['C'] && !secret) clip_set(buf);
+        if (g_in->ctrl && g_in->keyHit['V']) {
+            char tmp[512];
+            int got = clip_get(tmp, (int)sizeof tmp);
+            for (int k = 0; k < got && len < cap - 1; k++) {
+                char ch = tmp[k];
+                if (ch == '\n' || ch == '\r' || ch == '\t') continue; /* 1 line */
+                if (ch < 32) continue;
+                memmove(buf + caret + 1, buf + caret, (size_t)(len - caret + 1));
+                buf[caret] = ch;
+                caret++; len++; changed = 1;
+            }
         }
     }
     *caretf = (float)caret;

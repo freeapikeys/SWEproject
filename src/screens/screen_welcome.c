@@ -182,9 +182,50 @@ static void draw_journey(App *a, float x, float y, float w, float h,
         }
     }
 
+    /* ---- how busy it will be --------------------------------------------
+     *  The thing a passenger actually wants to know before they set off: is
+     *  it going to be a crush, and how long is security.  The crowd level is
+     *  the number of passengers on flights departing within three quarters
+     *  of an hour of theirs -- the people they will be sharing the terminal
+     *  and the queue with.                                                  */
+    if (by + 66.f < y + h) {
+        int nearby = 0;
+        for (int i = 0; i < wo->nFlights; i++) {
+            Flight *g = &wo->flight[i];
+            if (g->arrival || g->state == FS_CANCELLED) continue;
+            int d = g->estMin - f->estMin;
+            if (d < 0) d = -d;
+            if (d <= 45) nearby += g->pax;
+        }
+        float frac = cv_clampf((float)nearby / 700.f, 0.05f, 1.f);
+        const char *lvl; Color lc;
+        if      (frac < 0.30f) { lvl = "Quiet";     lc = C_OK;     }
+        else if (frac < 0.55f) { lvl = "Moderate";  lc = C_TEAL;   }
+        else if (frac < 0.80f) { lvl = "Busy";      lc = C_WARN;   }
+        else                   { lvl = "Very busy"; lc = C_DANGER; }
+
+        float secWait = a->flow.waitNow;
+        if (secWait < 1.f) secWait = 1.f;
+
+        tx_draw(c, "HOW BUSY IT WILL BE", x + 22.f, by,
+                font_track(TF_UI, 9, TW_BOLD, 1), C_INK_3, AL_L, AV_T);
+        tx_draw(c, lvl, x + w - 22.f, by, font_make(TF_UI, 11, TW_BOLD),
+                lc, AL_R, AV_T);
+        by += 16.f;
+        ui_meter(x + 22.f, by, w - 44.f, 7.f, frac, col_alpha(lc, .5f), lc);
+        by += 13.f;
+        char cl[110];
+        snprintf(cl, sizeof cl,
+                 "about %d travelling around your time  -  security queue ~%.0f min",
+                 nearby, secWait);
+        tx_draw(c, cl, x + 22.f, by, font_make(TF_UI, 10, TW_MED),
+                C_INK_3, AL_L, AV_T);
+        by += 18.f;
+    }
+
     /* ---- live advice ----------------------------------------------------- */
     if (by + 56.f < y + h) {
-        by += 10.f;
+        by += 6.f;
         float wait = a->flow.waitNow;
         if (wait < 1.f) wait = 1.f;
         float toGo = (float)f->estMin - wo->clock;
@@ -335,6 +376,33 @@ void screen_welcome(App *a, float x, float y, float w, float h)
 
     float leftW = (w - pad*2.f - 16.f) * 0.46f;
 
+    /*  Sign somebody in and the first thing they should see is their own
+     *  flight, not an empty search.  On first view we look for a booking
+     *  under the account's name and select it; done once, so the passenger
+     *  can then look up anyone else without being dragged back to their own.
+     *  A freshly created account with no booking simply finds nothing, which
+     *  the panel says plainly rather than looking broken.                   */
+    int isTraveller = (a->auth.kind == ACC_TRAVELLER && a->auth.name[0]);
+    if (!a->welcomeMatched && a->auth.name[0] && a->selPax == 0 &&
+        !a->searchPax[0]) {
+        a->welcomeMatched = 1;
+        for (int i = 0; i < wo->nPax; i++)
+            if (ci_contains(wo->pax[i].name, a->auth.name) &&
+                ci_contains(a->auth.name, wo->pax[i].name)) {   /* exact-ish */
+                a->selPax = wo->pax[i].id;
+                a->selFlight = wo->pax[i].flight;
+                break;
+            }
+    }
+
+    /* first name for the greeting */
+    char first[24] = "there";
+    if (a->auth.name[0]) {
+        snprintf(first, sizeof first, "%s", a->auth.name);
+        char *sp = strchr(first, ' ');
+        if (sp) *sp = 0;
+    }
+
     /* ---- the search itself ----------------------------------------------- */
     float hy = y + pad;
     ui_card(x + pad, hy, leftW, 150.f, R_LG);
@@ -343,11 +411,19 @@ void screen_welcome(App *a, float x, float y, float w, float h)
     cv_rrect_p(c, x + pad, hy, leftW, 150.f, R_LG, &hg);
 
     tx_backdrop(C_SURF);
-    tx_draw(c, "WELCOME TO PLAISANCE", x + pad + 22.f, hy + 18.f,
+    char eyebrow[48];
+    snprintf(eyebrow, sizeof eyebrow, "WELCOME%s%s",
+             a->auth.name[0] ? ", " : " TO PLAISANCE",
+             a->auth.name[0] ? "" : "");
+    tx_draw(c, eyebrow, x + pad + 22.f, hy + 18.f,
             font_track(TF_UI, 10, TW_BOLD, 2), C_V600, AL_L, AV_T);
-    tx_draw(c, "Find your flight", x + pad + 22.f, hy + 36.f,
-            font_make(TF_DISPLAY, 24, TW_SEMI), C_INK, AL_L, AV_T);
-    tx_draw(c, "Type your name, or a booking reference",
+    char title[40];
+    if (a->auth.name[0]) snprintf(title, sizeof title, "Hello, %s", first);
+    else                 snprintf(title, sizeof title, "Find your flight");
+    tx_clipped(c, title, x + pad + 22.f, hy + 36.f, leftW - 44.f,
+               font_make(TF_DISPLAY, 24, TW_SEMI), C_INK, AL_L, AV_T);
+    tx_draw(c, isTraveller ? "Your flight is below -- or look up anyone"
+                           : "Type a name, or a booking reference",
             x + pad + 22.f, hy + 70.f, font_make(TF_UI, 11, TW_MED),
             C_INK_3, AL_L, AV_T);
 
@@ -437,7 +513,7 @@ void screen_welcome(App *a, float x, float y, float w, float h)
     /* ---- right: the selected journey, then the FAQ ------------------------ */
     float rx = x + pad + leftW + 16.f;
     float rw = w - pad*2.f - leftW - 16.f;
-    float jh = (h - pad*2.f) * 0.62f;
+    float jh = (h - pad*2.f) * 0.66f;
 
     Passenger *sp = NULL;
     for (int i = 0; i < wo->nPax; i++)
@@ -448,14 +524,26 @@ void screen_welcome(App *a, float x, float y, float w, float h)
     } else {
         ui_card(rx, y + pad, rw, jh, R_LG);
         tx_backdrop(C_SURF);
-        icon_draw(c, IC_TICKET, rx + rw*0.5f, y + pad + jh*0.5f - 30.f, 34.f,
+        icon_draw(c, IC_TICKET, rx + rw*0.5f, y + pad + jh*0.5f - 34.f, 34.f,
                   C_INK_4);
-        tx_draw(c, "Select a passenger to see their journey",
-                rx + rw*0.5f, y + pad + jh*0.5f + 4.f,
-                font_make(TF_UI, 13, TW_MED), C_INK_2, AL_C, AV_M);
-        tx_draw(c, "gate, seat, bags and what happens next",
-                rx + rw*0.5f, y + pad + jh*0.5f + 26.f,
-                font_make(TF_UI, 11, TW_REG), C_INK_3, AL_C, AV_M);
+        /*  A signed-in traveller whose auto-match found nothing gets told
+         *  why, rather than a generic prompt that looks like a dead end.   */
+        if (isTraveller && a->welcomeMatched) {
+            char m[110];
+            snprintf(m, sizeof m, "No booking found under %s", a->auth.name);
+            tx_draw(c, m, rx + rw*0.5f, y + pad + jh*0.5f,
+                    font_make(TF_UI, 13, TW_SEMI), C_INK_2, AL_C, AV_M);
+            tx_draw(c, "Search above by the name printed on your ticket",
+                    rx + rw*0.5f, y + pad + jh*0.5f + 22.f,
+                    font_make(TF_UI, 11, TW_REG), C_INK_3, AL_C, AV_M);
+        } else {
+            tx_draw(c, "Select a passenger to see their journey",
+                    rx + rw*0.5f, y + pad + jh*0.5f,
+                    font_make(TF_UI, 13, TW_MED), C_INK_2, AL_C, AV_M);
+            tx_draw(c, "gate, seat, bags and what happens next",
+                    rx + rw*0.5f, y + pad + jh*0.5f + 22.f,
+                    font_make(TF_UI, 11, TW_REG), C_INK_3, AL_C, AV_M);
+        }
     }
 
     draw_faq(a, rx, y + pad + jh + 12.f, rw, h - pad*2.f - jh - 12.f);

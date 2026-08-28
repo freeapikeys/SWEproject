@@ -80,6 +80,7 @@ int   ui_text_field(uint64_t id, float x,float y,float w,float h,
 int   ui_secret_field(uint64_t id, float x,float y,float w,float h,
                     char *buf, int cap, const char *placeholder, int icon);
 int   ui_field_focused(uint64_t id);
+int   ui_any_field_focused(void);       /* any text field has the caret      */
 void  ui_focus    (uint64_t id);
 void  ui_focus_clear(void);
 

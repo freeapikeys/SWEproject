@@ -160,39 +160,100 @@ static void tab_flights(App *a, float x, float y, float w, float h)
     }
     ry += 48.f;
 
-    /* ---- gate ------------------------------------------------------------ */
-    tx_draw(c, "GATE", dx + 22.f, ry, font_track(TF_UI, 9, TW_BOLD, 1),
+    /* ---- gate -----------------------------------------------------------
+     *  Plaisance has eight contact gates.  A gate is "taken" when another
+     *  aeroplane is parked on it during the window this movement needs it --
+     *  so the colours describe THIS flight's window, not the whole day, and
+     *  the tile names the flight in the way, which is the thing a controller
+     *  actually needs to know.                                             */
+    int gfrom, gto;
+    ops_gate_window(wo, f, &gfrom, &gto);
+    char gw0[8], gw1[8]; fmt_hhmm(gfrom, gw0); fmt_hhmm(gto, gw1);
+    char ghdr[90];
+    snprintf(ghdr, sizeof ghdr, "GATE   -   needs one free %s to %s", gw0, gw1);
+    tx_draw(c, ghdr, dx + 22.f, ry, font_track(TF_UI, 9, TW_BOLD, 1),
             C_INK_3, AL_L, AV_T);
-    ry += 18.f;
+
+    /* a legend, so the colours are not a guessing game */
+    struct { const char *t; Color sw, tc; } LEG[3] = {
+        { "on this gate", C_V600, C_V700 },
+        { "free",         C_OK,   C_OK    },
+        { "taken",        C_WARN, C_WARN  },
+    };
+    float lx = dx + dw - 22.f;
+    for (int i = 2; i >= 0; i--) {
+        float tw2 = (float)tx_width(c, LEG[i].t, font_make(TF_UI, 10, TW_MED));
+        lx -= tw2 + 6.f;
+        tx_draw(c, LEG[i].t, lx, ry + 1.f, font_make(TF_UI, 10, TW_MED),
+                LEG[i].tc, AL_L, AV_T);
+        lx -= 12.f;
+        cv_circle(c, lx + 4.f, ry + 6.f, 4.f, LEG[i].sw);
+        lx -= 12.f;
+    }
+    ry += 20.f;
+
     float gw = (dw - 44.f - 7.f*5.f) / 8.f;
     for (int i = 0; i < OPS_MAX_GATE; i++) {
         int gate = i + 1;
-        float gx = dx + 22.f + i*(gw + 5.f);
-        float gy = ry;
-        int from, to;
-        ops_gate_window(wo, f, &from, &to);
-        int free = ops_gate_free(wo, gate, from, to, f->id);
-        int on   = (f->gate == gate);
+        float gx = dx + 22.f + i*(gw + 5.f), gy = ry, gh2 = 44.f;
+        int occ = ops_gate_occupant(wo, gate, gfrom, gto, f->id);
+        int on  = (f->gate == gate);
+        int hov = ui_hit(gx, gy, gw, gh2);
+        if (hov) ui_cursor(1);
+
+        Color base = on ? C_V600 : (occ ? C_WARN : C_OK);
+        Color bg   = on ? C_V600
+                        : col_alpha(base, (hov ? .24f : .13f));
+        Color fg   = on ? HEX(0xFFFFFF)
+                        : (occ ? C_WARN : HEX(0x0A6B42));
+        cv_rrect(c, gx, gy, gw, gh2, 8.f, bg);
+        if (!on)
+            cv_rrect_line(c, gx, gy, gw, gh2, 8.f, col_alpha(base, .5f), 1.2f);
+
         char lab[8]; snprintf(lab, sizeof lab, "%d", gate);
-        if (ui_button(uidi("opsg", gate), gx, gy, gw, 34.f, lab,
-                      on ? BTN_PRIMARY : (free ? BTN_SOFT : BTN_DANGER))) {
-            ops_flight_gate(wo, f->id, gate);
-            nt_scan(&a->notify, wo);
-            if (!free)
-                ui_toast(TOAST_WARN, "Gate clash",
-                         "That gate is already taken at this time.");
+        tx_backdrop(on ? C_V600 : C_SURF);
+        tx_draw(c, lab, gx + gw*0.5f, gy + (occ ? 11.f : 15.f),
+                font_track(TF_DISPLAY, 16, TW_BOLD, 0), fg, AL_C, AV_T);
+        if (occ) {
+            Flight *of = flight_by_id(wo, occ);
+            tx_clipped(c, of ? of->no : "--", gx + gw*0.5f, gy + 29.f, gw - 6.f,
+                       font_make(TF_UI, 9, TW_SEMI), fg, AL_C, AV_T);
+        }
+
+        if (hov) {
+            char tip[90];
+            if (on)       snprintf(tip, sizeof tip, "Gate %d -- this flight", gate);
+            else if (occ) {
+                Flight *of = flight_by_id(wo, occ);
+                int o0, o1; if (of) ops_gate_window(wo, of, &o0, &o1);
+                char oh[8]; fmt_hhmm(of ? o1 : 0, oh);
+                snprintf(tip, sizeof tip, "Gate %d -- taken by %s until %s",
+                         gate, of ? of->no : "another flight", oh);
+            } else snprintf(tip, sizeof tip, "Gate %d -- free, click to assign",
+                            gate);
+            ui_tooltip(gx, gy - 6.f, tip);
+
+            if (a->in.pressed) {
+                ops_flight_gate(wo, f->id, gate);
+                nt_scan(&a->notify, wo);
+                if (occ)
+                    ui_toast(TOAST_WARN, "Gate clash",
+                             "That gate is taken in this flight's window.");
+            }
         }
     }
-    ry += 44.f;
+    ry += 52.f;
 
     int sug = ops_gate_suggest(wo, f->id);
     if (sug > 0) {
-        char st2[90];
-        snprintf(st2, sizeof st2, "Gate %d is free for this movement", sug);
+        char st2[100];
+        snprintf(st2, sizeof st2,
+                 "Gate %d is free for this movement -- click it above", sug);
         tx_draw(c, st2, dx + 22.f, ry, font_make(TF_UI, 11, TW_MED),
                 C_OK, AL_L, AV_T);
     } else {
-        tx_draw(c, "No other gate is free in this window", dx + 22.f, ry,
+        tx_draw(c, "Every contact gate is taken in this window -- retime, or "
+                   "use a bussed remote stand", dx + 22.f, ry,
                 font_make(TF_UI, 11, TW_MED), C_WARN, AL_L, AV_T);
     }
     ry += 26.f;

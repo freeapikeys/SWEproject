@@ -263,6 +263,18 @@ int ops_gate_load(const World *w, int gate)
     return n;
 }
 
+int ops_gate_occupant(const World *w, int gate, int from, int to, int except)
+{
+    for (int i = 0; i < w->nFlights; i++) {
+        const Flight *f = &w->flight[i];
+        if (f->id == except || !gate_active(f) || f->gate != gate) continue;
+        int f0, f1;
+        ops_gate_window(w, f, &f0, &f1);
+        if (overlap_of(from - 10, to + 10, f0, f1) > 0) return f->id;
+    }
+    return 0;
+}
+
 /*  Pick a replacement gate.  Free is the hard requirement; among the free
  *  ones prefer the least busy, so the day's load stays spread instead of
  *  everything piling onto whichever gate has the lowest number.            */

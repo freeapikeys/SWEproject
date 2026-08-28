@@ -56,6 +56,16 @@ static const NavItem NAV[SC_COUNT] = {
     { "Records",      "files & journal",       IC_DATABASE, NULL         },
 };
 
+/*  Which screens a traveller may see.  Everything else is the operations
+ *  floor and the administrative record, which is staff only.  The sidebar,
+ *  the screen dispatch and the number-key shortcuts all consult this one
+ *  function, so there is a single definition of what a passenger can reach. */
+static int screen_is_passenger(int sc)
+{
+    return sc == SC_WELCOME || sc == SC_BOARD ||
+           sc == SC_SERVICES || sc == SC_REVIEWS;
+}
+
 /* ==========================================================================
  *  shared drawing helpers
  * ========================================================================== */
@@ -255,21 +265,13 @@ static void draw_sidebar(App *a, float w, float h)
 
     tx_backdrop(C_V900);
 
-    /* brand mark: a stylised tail fin */
-    float bx = 26.f, by = 30.f;
-    Path fin; path_reset(&fin);
-    path_move(&fin, bx, by + 30.f);
-    path_line(&fin, bx + 12.f, by);
-    path_line(&fin, bx + 22.f, by);
-    path_line(&fin, bx + 15.f, by + 30.f);
-    path_close(&fin);
-    Paint fg = paint_linear(bx, by, bx + 22.f, by + 30.f, C_V300, C_MAGENTA);
-    cv_fill(c, &fin, &fg, 1.f);
-    cv_rrect(c, bx, by + 32.f, 22.f, 3.f, 1.5f, col_alpha(C_V300, .8f));
+    /* brand mark */
+    float bx = 24.f, by = 30.f;
+    draw_logo(c, bx + 20.f, by + 20.f, 16.f);
 
-    tx_draw(c, "AURA", bx + 34.f, by - 2.f, font_track(TF_DISPLAY, 25, TW_BOLD, 3),
+    tx_draw(c, "AURA", bx + 48.f, by - 2.f, font_track(TF_DISPLAY, 25, TW_BOLD, 3),
             HEX(0xFFFFFF), AL_L, AV_T);
-    tx_draw(c, "PLAISANCE OPS", bx + 35.f, by + 26.f,
+    tx_draw(c, "PLAISANCE OPS", bx + 49.f, by + 26.f,
             font_track(TF_UI, 9, TW_SEMI, 2), col_alpha(C_V300, .95f), AL_L, AV_T);
 
     /* navigation -- grouped, and scrolled because it no longer fits */
@@ -277,16 +279,26 @@ static void draw_sidebar(App *a, float w, float h)
     float navH   = h - 200.f - navTop;
     if (navH < 120.f) navH = 120.f;
 
+    /*  A traveller sees only the passenger screens; the operations floor,
+     *  safety, the engines and the administrative record are staff only.
+     *  This is the fix for "even travellers are getting access to admin
+     *  resources" -- the entries are not merely hidden, they are unreachable,
+     *  because the dispatch and the keyboard shortcuts check the same rule. */
+    int staff = (a->auth.kind == ACC_STAFF);
+
     const float IH = 40.f, GAP = 2.f, HDR = 24.f;
     float contentH = 6.f;
-    for (int i = 0; i < SC_COUNT; i++)
+    for (int i = 0; i < SC_COUNT; i++) {
+        if (!staff && !screen_is_passenger(i)) continue;
         contentH += (NAV[i].section ? HDR : 0.f) + IH + GAP;
+    }
 
     float noff = ui_scroll_begin(uid("navscroll"), 4.f, navTop,
                                  SIDEBAR_W - 8.f, navH, contentH);
     float ny = navTop + 2.f - noff;
 
     for (int i = 0; i < SC_COUNT; i++) {
+        if (!staff && !screen_is_passenger(i)) continue;   /* role filter */
         if (NAV[i].section) {
             if (ny + HDR > navTop && ny < navTop + navH)
                 tx_draw_a(c, NAV[i].section, 22.f, ny + HDR*0.5f + 2.f,
@@ -411,6 +423,7 @@ static void draw_sidebar(App *a, float w, float h)
         if (ui_icon_btn(uid("signout"), SIDEBAR_W - 46.f, h - 36.f, 28.f,
                         IC_LOCK, BTN_GHOST)) {
             auth_sign_out(&a->auth);
+            a->welcomeMatched = 0; a->selPax = 0;
             store_journal(&a->w, "Signed out");
         }
     } else {
@@ -592,19 +605,11 @@ static void draw_boot(App *a, float sw, float sh)
 
     /* brand */
     float in = ease_out_cubic(cv_clampf(t/0.7f, 0.f, 1.f));
-    float fin_s = 1.f + (1.f - in)*0.4f;
-    Path fin; path_reset(&fin);
-    float fx = cx - 92.f, fy = cy - 34.f*fin_s;
-    path_move(&fin, fx, fy + 64.f*fin_s);
-    path_line(&fin, fx + 25.f*fin_s, fy);
-    path_line(&fin, fx + 46.f*fin_s, fy);
-    path_line(&fin, fx + 32.f*fin_s, fy + 64.f*fin_s);
-    path_close(&fin);
-    Paint fg = paint_linear(fx, fy, fx + 46.f, fy + 64.f, C_V200, C_MAGENTA);
-    cv_fill(c, &fin, &fg, in);
+    if (in > 0.12f)
+        draw_logo(c, cx - 70.f, cy, 30.f * (0.7f + 0.3f*in));
 
     tx_backdrop(C_V900);
-    tx_draw_a(c, "AURA", cx - 32.f, cy - 34.f,
+    tx_draw_a(c, "AURA", cx - 22.f, cy - 34.f,
               font_track(TF_DISPLAY, 62, TW_BOLD, 6), HEX(0xFFFFFF), AL_L, AV_T, in);
     tx_draw_a(c, "AIRPORT UNIFIED RESOURCE ADMINISTRATION", cx, cy + 62.f,
               font_track(TF_UI, 11, TW_SEMI, 4), C_V200, AL_C, AV_T,
@@ -849,6 +854,12 @@ static void app_frame(App *a)
     float cx = SIDEBAR_W, cw = sw - SIDEBAR_W;
     draw_topbar(a, cx, cw);
 
+    /*  A traveller can never land on a staff screen, however they got there
+     *  -- a stale selection from a previous session, a keyboard shortcut, or
+     *  a role change.  Redirect to their own screen rather than drawing it. */
+    if (a->auth.kind != ACC_STAFF && !screen_is_passenger(a->screen))
+        a->screen = SC_WELCOME;
+
     /* screens fade and lift very slightly when switched */
     a->screenFade = anim_to(uid("scfade"), 1.f, 9.f);
     if (a->prevScreen != a->screen) {
@@ -896,13 +907,22 @@ static void key_shortcuts(App *a, int vk)
 {
     /*  Ten keys, fifteen screens.  The digits reach the first ten in sidebar
      *  order; the rest are a click away, which is the honest trade rather
-     *  than inventing a second modifier nobody will remember.             */
-    if (vk >= '1' && vk <= '9') { a->screen = vk - '1'; return; }
-    if (vk == '0' && SC_COUNT > 9) { a->screen = 9; return; }
+     *  than inventing a second modifier nobody will remember.  A traveller's
+     *  digits only reach their own screens -- the role rule is enforced here
+     *  too, not only in the sidebar.                                       */
+    int target = -1;
+    if (vk >= '1' && vk <= '9') target = vk - '1';
+    if (vk == '0' && SC_COUNT > 9) target = 9;
+    if (target >= 0 && target < SC_COUNT) {
+        if (a->auth.kind == ACC_STAFF || screen_is_passenger(target))
+            a->screen = target;
+        return;
+    }
     switch (vk) {
     case 'A': a->chatDock = !a->chatDock; break;
     case 'L':
         auth_sign_out(&a->auth);
+        a->welcomeMatched = 0; a->selPax = 0;
         store_journal(&a->w, "Operator signed out");
         ui_toast(TOAST_INFO, "Console locked", "Sign in again to continue.");
         break;
@@ -973,15 +993,13 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM wp, LPARAM lp)
         if (vk < 256) { a->in.keyHit[vk] = 1; a->in.keyDown[vk] = 1; }
         a->in.shift = (GetKeyState(VK_SHIFT) & 0x8000) != 0;
         a->in.ctrl  = (GetKeyState(VK_CONTROL) & 0x8000) != 0;
-        /* shortcuts only when a text field does not have focus */
-        /* shortcuts are dead while the console is locked, or a field has
-         * focus -- otherwise typing an address into the gate would page
-         * through the screens behind it */
-        if (auth_is_open(&a->auth) &&
-            !ui_field_focused(uid("chatfield")) &&
-            !ui_field_focused(uid("boardsearch")) &&
-            !ui_field_focused(uid("paxsearch")) &&
-            !ui_field_focused(uid("bagsearch")))
+        /*  Shortcuts are dead while the console is locked, and while ANY
+         *  text field has the caret.  Enumerating fields by name was the
+         *  old way and it was a bug waiting to happen: the review box and
+         *  every field added since were not on the list, so typing a review
+         *  that contained an "l" fired the sign-out shortcut and threw the
+         *  passenger back to the login screen.  One check covers them all. */
+        if (auth_is_open(&a->auth) && !ui_any_field_focused())
             key_shortcuts(a, vk);
     } return 0;
 
@@ -1042,6 +1060,7 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE prev, LPSTR cmd, int show)
     g_app.fieldLabels = 1;
     g_app.fieldTrails = 1;
     g_app.bagAutoInject = 1;
+    g_app.bagIdentify   = 1;
     g_app.screen = SC_WELCOME;
     g_app.prevScreen = -1;
     g_app.selStand = -1;

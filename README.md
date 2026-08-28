@@ -76,6 +76,7 @@ gcc -O2 -std=c11 -Iinclude -Isrc src/main.c src/engine/*.c src/core/*.c ^
 | `L` | lock the console |
 | `Esc` | close the open panel |
 | `Enter` | submit, on the sign-in screen |
+| `Ctrl+C` / `Ctrl+V` | copy / paste inside any text field (bag tags, references) |
 
 There is deliberately no pause and no fast-forward. The clock is the machine's
 own clock, so neither would be telling the truth about what the system does.
@@ -116,7 +117,13 @@ password. There is no invitation list.
 
 * **Any address works.** Nothing is sent anywhere; the account is local.
 * Tick *Airport staff* at registration and the console opens on Operations
-  instead of the Welcome screen. Neither kind is locked out of anything.
+  instead of the Welcome screen. **A traveller sees only the passenger
+  screens** -- Welcome, Movements, Services and Reviews; the operations floor,
+  safety, the engines and the administrative record are staff only, enforced
+  in the sidebar, the screen dispatch and the keyboard shortcuts alike.
+* Signed in, the Welcome screen greets you by name and looks for a booking
+  under it; it also shows how busy the terminal will be around your flight
+  and the security queue to expect.
 * Only a per-account random salt and a SHA-256 digest, iterated 100,000
   times, are written to `data/accounts.dat` (git-ignored). **The password
   itself is never stored and cannot be recovered from that file.**

@@ -68,6 +68,12 @@ int  ops_gate_free     (const World *w, int gate, int from, int to,
 int  ops_gate_suggest  (const World *w, int flightId);   /* -1 if none free */
 int  ops_gate_load     (const World *w, int gate);       /* flights today   */
 
+/*  Which flight is holding a gate during [from,to], if any -- so the console
+ *  can say WHY a gate is unavailable rather than just colouring it.  Returns
+ *  the occupying flight's id, or 0 if the gate is free.                    */
+int  ops_gate_occupant (const World *w, int gate, int from, int to,
+                        int exceptFlightId);
+
 /* ---------------------------------------------------------- delay ripple -- */
 
 typedef struct {

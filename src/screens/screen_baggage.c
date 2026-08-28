@@ -135,6 +135,62 @@ static Color bag_colour(Bag *b)
     return HEX(PAL[b->colour % 6]);
 }
 
+/*  A colour per processing stage, so in identify mode the colour of a bag
+ *  tells you where it is in the system rather than just being decorative.  */
+static Color state_colour(BagState s)
+{
+    switch (s) {
+    case BG_CHECKIN: return C_V400;
+    case BG_SCREEN:  return C_TEAL;
+    case BG_SORT:    return C_INFO;
+    case BG_MAKEUP:  return C_GOLD;
+    case BG_HELD:    return C_DANGER;
+    default:         return C_V300;
+    }
+}
+
+static const char *state_short(BagState s)
+{
+    switch (s) {
+    case BG_CHECKIN: return "CHECK-IN";
+    case BG_SCREEN:  return "SCREEN";
+    case BG_SORT:    return "SORT";
+    case BG_MAKEUP:  return "MAKE-UP";
+    case BG_HELD:    return "HELD";
+    default:         return "";
+    }
+}
+
+/*  A computer-vision style detection marker: a tracking box with corner
+ *  ticks and a floating label, exactly the overlay a real baggage-hall
+ *  camera system paints over each item it has identified.                  */
+static void draw_detection(Canvas *c, float x, float y, float sz, Color col,
+                           const char *id, int label)
+{
+    float r = sz * 0.92f;
+    float x0 = x - r, y0 = y - r, s = r*2.f;
+    float t = r * 0.34f;                     /* corner tick length           */
+
+    /* four corner ticks */
+    Color cc = col_alpha(col, .9f);
+    cv_line(c, x0, y0, x0 + t, y0, cc, 1.4f);
+    cv_line(c, x0, y0, x0, y0 + t, cc, 1.4f);
+    cv_line(c, x0 + s, y0, x0 + s - t, y0, cc, 1.4f);
+    cv_line(c, x0 + s, y0, x0 + s, y0 + t, cc, 1.4f);
+    cv_line(c, x0, y0 + s, x0 + t, y0 + s, cc, 1.4f);
+    cv_line(c, x0, y0 + s, x0, y0 + s - t, cc, 1.4f);
+    cv_line(c, x0 + s, y0 + s, x0 + s - t, y0 + s, cc, 1.4f);
+    cv_line(c, x0 + s, y0 + s, x0 + s, y0 + s - t, cc, 1.4f);
+
+    if (label && id && *id) {
+        Font f = font_track(TF_MONO, 8, TW_BOLD, 0);
+        float tw = (float)tx_width(c, id, f) + 8.f;
+        cv_rrect(c, x - tw*0.5f, y0 - 13.f, tw, 12.f, 3.f, col_alpha(col, .92f));
+        tx_backdrop(col);
+        tx_draw(c, id, x, y0 - 7.f, f, HEX(0xFFFFFF), AL_C, AV_M);
+    }
+}
+
 /* --------------------------------------------------------------------------
  *  the machine room
  * ------------------------------------------------------------------------- */
@@ -256,6 +312,7 @@ static void draw_bhs(App *a, float x, float y, float w, float h)
     /* ---- bags ------------------------------------------------------------ */
     Bag *inTunnel = NULL;
     float bagSz = 17.f * b_s;
+    int tracked = 0;
     for (int i = 0; i < wo->nBags; i++) {
         Bag *b = &wo->bag[i];
         if (b->state >= BG_LOADED) continue;
@@ -268,8 +325,19 @@ static void draw_bhs(App *a, float x, float y, float w, float h)
         float px, py, hd;
         path_sample(lp, ln, b->t, &px, &py, &hd);
         int sel = (a->selBag == b->id);
-        draw_bag(c, BX(px), BY(py), bagSz, bag_colour(b), b->threat,
-                 b->wobble, sel);
+        Color bc = a->bagIdentify ? state_colour(b->state) : bag_colour(b);
+        draw_bag(c, BX(px), BY(py), bagSz, bc, b->threat, b->wobble, sel);
+        tracked++;
+
+        /*  Identification overlay: a tracking box and the bag's id on every
+         *  item, the way a real baggage-hall vision system marks what it has
+         *  recognised.  The colour is the processing stage.                 */
+        if (a->bagIdentify) {
+            size_t tl = strlen(b->tag);
+            const char *id4 = b->tag + (tl > 4 ? tl - 4 : 0);
+            draw_detection(c, BX(px), BY(py), bagSz, b->threat ? C_DANGER : bc,
+                           id4, 1);
+        }
 
         if (b->state == BG_SCREEN && b->t > 0.30f && b->t < 0.72f && !inTunnel)
             inTunnel = b;
@@ -278,6 +346,13 @@ static void draw_bhs(App *a, float x, float y, float w, float h)
         if (ui_hit(BX(px)-hr, BY(py)-hr, hr*2.f, hr*2.f)) {
             ui_cursor(1);
             if (a->in.pressed) a->selBag = b->id;
+            if (a->bagIdentify) {
+                /* the full tag and state on hover, like clicking a detection */
+                char tip[48];
+                snprintf(tip, sizeof tip, "%s  -  %s", b->tag,
+                         state_short(b->state));
+                ui_tooltip(BX(px), BY(py) - bagSz - 14.f, tip);
+            }
         }
     }
 
@@ -322,6 +397,37 @@ static void draw_bhs(App *a, float x, float y, float w, float h)
         tx_draw(c, score > BAG_THRESHOLD ? "DIVERT" : "CLEAR", px + pw - 10.f*b_s,
                 py + 68.f*b_s, small, score > BAG_THRESHOLD ? C_DANGER : C_OK,
                 AL_R, AV_M);
+    }
+
+    /* ---- identification control bar (overlay, on top of the feed) -------- */
+    float hbx = x + 12.f, hby = y + 10.f;
+    if (ui_button_i(uid("bagident"), hbx, hby, 150.f, 28.f,
+                    a->bagIdentify ? "Identifying bags" : "Identify bags",
+                    IC_SCAN, a->bagIdentify ? BTN_PRIMARY : BTN_DARK))
+        a->bagIdentify = !a->bagIdentify;
+
+    tx_backdrop(C_NIGHT_2);
+    char tc[40];
+    snprintf(tc, sizeof tc, "%d bags tracked", tracked);
+    tx_draw(c, tc, hbx + 160.f, hby + 14.f, font_make(TF_UI, 11, TW_SEMI),
+            col_alpha(HEX(0xFFFFFF), .82f), AL_L, AV_M);
+
+    /* a legend of the stage colours, so the colour of a bag means something */
+    if (a->bagIdentify) {
+        struct { BagState s; } LG[5] = {
+            {BG_CHECKIN}, {BG_SCREEN}, {BG_SORT}, {BG_MAKEUP}, {BG_HELD} };
+        float lx = x + w - 14.f;
+        for (int i = 4; i >= 0; i--) {
+            const char *nm = state_short(LG[i].s);
+            Font lf = font_make(TF_UI, 10, TW_SEMI);
+            float tw2 = (float)tx_width(c, nm, lf);
+            lx -= tw2;
+            tx_draw(c, nm, lx, hby + 14.f, lf,
+                    col_alpha(HEX(0xFFFFFF), .8f), AL_L, AV_M);
+            lx -= 10.f;
+            cv_circle(c, lx, hby + 14.f, 4.f, state_colour(LG[i].s));
+            lx -= 14.f;
+        }
     }
 
     cv_clip_pop(c);

@@ -89,3 +89,69 @@ void draw_stars(Canvas *c, float x, float y, float size, float value,
         }
     }
 }
+
+/* --------------------------------------------------------------------------
+ *  The AURA mark.
+ *
+ *  A rounded badge with a diagonal purple-to-magenta gradient, a paper plane
+ *  climbing out of it, and a single orbiting dot on a short arc -- the plane
+ *  for travel, the orbit for the tracking and radar the application is built
+ *  around.  Drawn entirely with the rasteriser so it stays crisp at any size
+ *  and needs no image file, which the no-dependencies rule would forbid.
+ *
+ *  `r` is the badge's corner radius; the whole mark spans about 2.4r.
+ * ------------------------------------------------------------------------- */
+void draw_logo(Canvas *c, float cx, float cy, float r)
+{
+    float s = r * 1.20f;                     /* badge half-extent            */
+
+    /* the badge */
+    Paint g = paint_linear(cx - s, cy - s, cx + s, cy + s, C_V500, C_MAGENTA);
+    cv_rrect_p(c, cx - s, cy - s, s*2.f, s*2.f, r*0.55f, &g);
+    cv_glow(c, cx - s*0.35f, cy - s*0.45f, s*1.05f, HEX(0xFFFFFF), 0.10f);
+    cv_rrect_line(c, cx - s, cy - s, s*2.f, s*2.f, r*0.55f,
+                  col_alpha(HEX(0xFFFFFF), .20f), 1.2f);
+
+    /* the orbit: a tilted ellipse arc, with a dot travelling along it */
+    float ph = anim_time() * 0.9f;
+    float ea = r * 1.02f, eb = r * 0.44f;   /* semi-axes                    */
+    float tilt = -0.62f;                     /* radians                      */
+    float ct = cosf(tilt), st = sinf(tilt);
+    float prevx = 0.f, prevy = 0.f;
+    for (int i = 0; i <= 40; i++) {
+        float a = (float)i / 40.f * 6.2831853f;
+        float ox = cosf(a) * ea, oy = sinf(a) * eb;
+        float px = cx + ox*ct - oy*st;
+        float py = cy + ox*st + oy*ct;
+        /* the far half of the orbit is drawn fainter, so it reads as 3-D */
+        float depth = 0.5f + 0.5f*sinf(a);
+        if (i > 0)
+            cv_line(c, prevx, prevy, px, py,
+                    col_alpha(HEX(0xFFFFFF), 0.10f + 0.16f*depth), 1.4f);
+        prevx = px; prevy = py;
+    }
+    {
+        float ox = cosf(ph) * ea, oy = sinf(ph) * eb;
+        float dx = cx + ox*ct - oy*st;
+        float dy = cy + ox*st + oy*ct;
+        cv_circle(c, dx, dy, r*0.11f, HEX(0xFFFFFF));
+        cv_glow(c, dx, dy, r*0.4f, HEX(0xFFFFFF), 0.5f);
+    }
+
+    /* the paper plane, climbing up-right */
+    Path body; path_reset(&body);
+    path_move (&body, cx - r*0.62f, cy + r*0.10f);   /* left wingtip        */
+    path_line (&body, cx + r*0.66f, cy - r*0.60f);   /* nose, up-right      */
+    path_line (&body, cx + r*0.02f, cy + r*0.66f);   /* tail               */
+    path_line (&body, cx - r*0.10f, cy + r*0.12f);   /* inner notch        */
+    path_close(&body);
+    cv_fill_col(c, &body, HEX(0xFFFFFF));
+
+    /* the underside fold, a touch darker so the two wings separate */
+    Path fold; path_reset(&fold);
+    path_move (&fold, cx - r*0.10f, cy + r*0.12f);
+    path_line (&fold, cx + r*0.02f, cy + r*0.66f);
+    path_line (&fold, cx + r*0.66f, cy - r*0.60f);
+    path_close(&fold);
+    cv_fill_col(c, &fold, col_alpha(C_V700, .32f));
+}
