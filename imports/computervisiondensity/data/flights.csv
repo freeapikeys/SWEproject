@@ -1,0 +1,6 @@
+# flight_id,airline,arrival_time(min-from-start),pax,priority
+MK101,AirMauritius,2,180,1
+MK202,AirMauritius,5,120,2
+MK303,LowCost,7,90,3
+MK404,Charter,12,40,3
+MK505,Regional,15,60,2
