@@ -369,10 +369,11 @@ static void panel_write(App *a, float x, float y, float w, float h)
         rv_add(&a->reviews, wo, (ReviewService)a->rvService, a->rvStars,
                a->auth.name[0] ? a->auth.name : "Guest", a->rvText,
                verified, 1);
+        rv_save(&a->reviews, "data/reviews.csv");   /* survives closing the app */
         a->rvText[0] = 0;
         a->rvIndex   = 0;
         ui_focus_clear();
-        ui_toast(TOAST_OK, "Thank you", "Your review is now on the board.");
+        ui_toast(TOAST_OK, "Thank you", "Your review is saved and on the board.");
     }
 }
 
@@ -382,6 +383,13 @@ static void panel_write(App *a, float x, float y, float w, float h)
 
 void screen_reviews(App *a, float x, float y, float w, float h)
 {
+    /* pick up reviews posted elsewhere (another account, an earlier session)
+     * when the screen is opened -- but not while it is already open */
+    if (a->reviewsReloadPending) {
+        rv_load(&a->reviews, &a->w, "data/reviews.csv");
+        a->reviewsReloadPending = 0;
+    }
+
     float pad = PAD;
     float bx = x + pad, by = y + pad;
     float bw = w - pad*2.f, bh = h - pad*2.f;

@@ -5,6 +5,7 @@
 #include "feedback.h"
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
 
 /* ==========================================================================
  *  reviews
@@ -146,6 +147,7 @@ int rv_add(ReviewBook *B, World *w, ReviewService s, int stars,
     r->year      = w->year;
     r->verified  = verified;
     r->ownReview = own;
+    r->userSubmitted = 1;            /* everything added here is a real post */
     snprintf(r->author, sizeof r->author, "%s",
              (author && *author) ? author : "Anonymous");
     snprintf(r->text, sizeof r->text, "%s", text);
@@ -153,6 +155,87 @@ int rv_add(ReviewBook *B, World *w, ReviewService s, int stars,
     world_log(w, LG_INFO, "Review left: %d stars for %s",
               stars, rv_service_name(s));
     return r->id;
+}
+
+/* --------------------------------------------------------------------------
+ *  Persistence.  A pipe-delimited line per posted review; the free text has
+ *  its pipes and newlines stripped so one review is always exactly one line.
+ * ------------------------------------------------------------------------- */
+void rv_save(const ReviewBook *B, const char *path)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f) return;
+    fprintf(f, "# AURA passenger reviews posted in the app.\n"
+               "# service|stars|verified|day|month|year|author|text\n");
+    for (int i = 0; i < B->n; i++) {
+        const Review *r = &B->r[i];
+        if (!r->userSubmitted) continue;         /* seeds live in the source */
+        char au[64], tx[REVIEW_TEXT];
+        int k = 0;
+        for (const char *p = r->author; *p && k < (int)sizeof au - 1; p++)
+            au[k++] = (*p == '|' || *p == '\n' || *p == '\r') ? ' ' : *p;
+        au[k] = 0;
+        k = 0;
+        for (const char *p = r->text; *p && k < (int)sizeof tx - 1; p++)
+            tx[k++] = (*p == '|' || *p == '\n' || *p == '\r') ? ' ' : *p;
+        tx[k] = 0;
+        fprintf(f, "%d|%d|%d|%d|%d|%d|%s|%s\n", (int)r->service, r->stars,
+                r->verified, r->day, r->month, r->year, au, tx);
+    }
+    fclose(f);
+}
+
+int rv_load(ReviewBook *B, World *w, const char *path)
+{
+    FILE *f = fopen(path, "rb");
+    if (!f) return 0;
+
+    /*  Idempotent: drop the reviews we previously loaded/posted and rebuild
+     *  them from the file, so reloading (on entering the screen, or picking
+     *  up another account's post) never duplicates anything.  The seeds are
+     *  left untouched.                                                      */
+    int keep = 0;
+    for (int i = 0; i < B->n; i++)
+        if (!B->r[i].userSubmitted) B->r[keep++] = B->r[i];
+    B->n = keep;
+
+    char line[REVIEW_TEXT + 128];
+    int loaded = 0;
+    while (fgets(line, sizeof line, f) && B->n < MAX_REVIEWS) {
+        if (line[0] == '#' || line[0] == '\n' || line[0] == '\r') continue;
+        size_t ln = strlen(line);
+        while (ln && (line[ln-1] == '\n' || line[ln-1] == '\r')) line[--ln] = 0;
+
+        /* split on the first seven pipes; the text keeps any remainder */
+        char *fld[8]; int nf = 0;
+        char *p = line;
+        for (; nf < 7; nf++) {
+            char *bar = strchr(p, '|');
+            if (!bar) break;
+            *bar = 0; fld[nf] = p; p = bar + 1;
+        }
+        if (nf < 7) continue;                    /* malformed line          */
+        fld[7] = p;                              /* the rest is the text    */
+
+        Review *r = &B->r[B->n++];
+        memset(r, 0, sizeof *r);
+        r->id        = B->nextId++;
+        r->service   = (ReviewService)atoi(fld[0]);
+        r->stars     = atoi(fld[1]);
+        r->verified  = atoi(fld[2]);
+        r->day       = atoi(fld[3]);
+        r->month     = atoi(fld[4]);
+        r->year      = atoi(fld[5]);
+        r->userSubmitted = 1;
+        if (r->service < 0 || r->service >= RV_SERVICE_COUNT) r->service = RV_OVERALL;
+        if (r->stars < 1 || r->stars > 5) r->stars = 3;
+        snprintf(r->author, sizeof r->author, "%s", fld[6]);
+        snprintf(r->text,   sizeof r->text,   "%s", fld[7]);
+        loaded++;
+    }
+    fclose(f);
+    (void)w;
+    return loaded;
 }
 
 int rv_count(const ReviewBook *B, ReviewService s)

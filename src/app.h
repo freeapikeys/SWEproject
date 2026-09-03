@@ -129,6 +129,7 @@ typedef struct {
     int    rvStars;
     int    rvIndex;            /* carousel position                         */
     int    rvShowAll;
+    int    reviewsReloadPending;   /* reload from disk on next screen entry */
     char   rvText[REVIEW_TEXT];
 
     /* resources */

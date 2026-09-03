@@ -58,6 +58,33 @@ static int match_rank(const Passenger *p, const char *q)
     return 0;
 }
 
+/* case-insensitive exact match of a full booking reference */
+static int pnr_ieq(const char *pnr, const char *q)
+{
+    if (!q || strlen(q) < 6) return 0;           /* a PNR is six characters */
+    for (int i = 0; pnr[i] || q[i]; i++) {
+        char a = pnr[i], b = q[i];
+        if (a >= 'a' && a <= 'z') a = (char)(a - 32);
+        if (b >= 'a' && b <= 'z') b = (char)(b - 32);
+        if (a != b) return 0;
+    }
+    return 1;
+}
+
+/*  What a signed-in traveller is allowed to see.  A passenger may see their
+ *  OWN booking (matched to their account name), or a booking whose exact
+ *  reference they type -- because holding the reference is proof it is
+ *  theirs.  They can never browse other passengers by name: the manifest is
+ *  not the traveller's to read.  Staff (check-in) get the full search.      */
+static int traveller_may_see(const Passenger *p, const char *accountName,
+                             const char *query)
+{
+    int own = accountName && accountName[0] &&
+              ci_contains(p->name, accountName) &&
+              ci_contains(accountName, p->name);
+    return own || pnr_ieq(p->pnr, query);
+}
+
 /* ==========================================================================
  *  the passenger's own journey
  * ========================================================================== */
@@ -422,23 +449,36 @@ void screen_welcome(App *a, float x, float y, float w, float h)
     else                 snprintf(title, sizeof title, "Find your flight");
     tx_clipped(c, title, x + pad + 22.f, hy + 36.f, leftW - 44.f,
                font_make(TF_DISPLAY, 24, TW_SEMI), C_INK, AL_L, AV_T);
-    tx_draw(c, isTraveller ? "Your flight is below -- or look up anyone"
-                           : "Type a name, or a booking reference",
+    int staff = (a->auth.kind == ACC_STAFF);
+    tx_draw(c, staff ? "Search any passenger, name or booking reference"
+                     : "Find your flight with your booking reference",
             x + pad + 22.f, hy + 70.f, font_make(TF_UI, 11, TW_MED),
             C_INK_3, AL_L, AV_T);
 
     ui_text_field(uid("welcomesearch"), x + pad + 22.f, hy + 92.f,
                   leftW - 44.f, 44.f, a->searchPax, sizeof a->searchPax,
-                  "e.g. Ramgoolam", IC_SEARCH);
+                  staff ? "name or reference" : "your booking reference, e.g. 6C382O",
+                  IC_SEARCH);
 
     /* ---- live results ---------------------------------------------------- */
     float ry0 = hy + 164.f;
     float rh  = h - (ry0 - y) - pad;
     ui_card(x + pad, ry0, leftW, rh, R_LG);
 
+    /*  A traveller only ever sees their own booking (or one whose exact
+     *  reference they hold).  Only staff at check-in may read the manifest --
+     *  showing every passenger's name to any signed-in traveller would be a
+     *  data-protection breach.                                              */
     int idx[96], rank[96], n = 0;
     for (int i = 0; i < wo->nPax && n < 96; i++) {
-        int r = match_rank(&wo->pax[i], a->searchPax);
+        int r;
+        if (staff) {
+            r = match_rank(&wo->pax[i], a->searchPax);
+        } else {
+            if (!traveller_may_see(&wo->pax[i], a->auth.name, a->searchPax))
+                continue;
+            r = 4;
+        }
         if (!r) continue;
         idx[n] = i; rank[n] = r; n++;
     }
@@ -453,9 +493,10 @@ void screen_welcome(App *a, float x, float y, float w, float h)
     tx_backdrop(C_SURF);
     char hdr[56];
     snprintf(hdr, sizeof hdr, "%d MATCHING PASSENGER%s", n, n == 1 ? "" : "S");
-    tx_draw(c, a->searchPax[0] ? hdr : "TRAVELLING TODAY",
-            x + pad + 18.f, ry0 + 15.f, font_track(TF_UI, 10, TW_BOLD, 2),
-            C_V600, AL_L, AV_T);
+    const char *listHdr = staff ? (a->searchPax[0] ? hdr : "TRAVELLING TODAY")
+                                : "YOUR BOOKING";
+    tx_draw(c, listHdr, x + pad + 18.f, ry0 + 15.f,
+            font_track(TF_UI, 10, TW_BOLD, 2), C_V600, AL_L, AV_T);
 
     float lY = ry0 + 40.f, lH = rh - 50.f;
     float rowH = 52.f;
@@ -503,11 +544,16 @@ void screen_welcome(App *a, float x, float y, float w, float h)
 
     if (!n) {
         tx_backdrop(C_SURF);
-        icon_draw(c, IC_SEARCH, x + pad + leftW*0.5f, ry0 + rh*0.5f - 16.f,
+        icon_draw(c, IC_SEARCH, x + pad + leftW*0.5f, ry0 + rh*0.5f - 24.f,
                   26.f, C_INK_4);
-        tx_draw(c, "No passenger of that name is travelling today",
-                x + pad + leftW*0.5f, ry0 + rh*0.5f + 12.f,
+        tx_draw(c, staff ? "No passenger matches that search"
+                         : "Enter your booking reference to find your flight",
+                x + pad + leftW*0.5f, ry0 + rh*0.5f + 4.f,
                 font_make(TF_UI, 12, TW_MED), C_INK_3, AL_C, AV_M);
+        if (!staff)
+            tx_draw(c, "It is the six-character code on your ticket or email",
+                    x + pad + leftW*0.5f, ry0 + rh*0.5f + 24.f,
+                    font_make(TF_UI, 11, TW_REG), C_INK_4, AL_C, AV_M);
     }
 
     /* ---- right: the selected journey, then the FAQ ------------------------ */

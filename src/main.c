@@ -792,6 +792,7 @@ static void app_frame(App *a)
             nt_init(&a->notify);
             nt_scan(&a->notify, &a->w);      /* record the baseline, silently */
             rv_init(&a->reviews, &a->w);
+            rv_load(&a->reviews, &a->w, "data/reviews.csv");  /* posts survive restarts */
             lp_init(&a->lost, &a->w);
             pq_init(&a->qSecurity, "Security screening", 5);
             pq_init(&a->qBoarding, "Boarding gate", 2);
@@ -859,6 +860,12 @@ static void app_frame(App *a)
      *  a role change.  Redirect to their own screen rather than drawing it. */
     if (a->auth.kind != ACC_STAFF && !screen_is_passenger(a->screen))
         a->screen = SC_WELCOME;
+
+    /*  Reviews are reloaded from disk each time the screen is opened, so a
+     *  review posted by another account (or in an earlier session) appears
+     *  without a restart.  While the screen is open it is not reloaded, so a
+     *  review just posted here stays put.                                   */
+    if (a->screen != SC_REVIEWS) a->reviewsReloadPending = 1;
 
     /* screens fade and lift very slightly when switched */
     a->screenFade = anim_to(uid("scfade"), 1.f, 9.f);
@@ -1024,10 +1031,113 @@ static LRESULT CALLBACK wndproc(HWND h, UINT m, WPARAM wp, LPARAM lp)
     return DefWindowProc(h, m, wp, lp);
 }
 
+/*  The window icon -- the little picture in the taskbar and the title bar.
+ *
+ *  It is not a .ico file on disk: the brief rules out external assets and
+ *  libraries, so the icon is drawn at run time by the same rasteriser that
+ *  draws everything else, into an off-screen buffer, and handed to Windows as
+ *  a bitmap.  The badge gives the colour; a second pass draws the same badge
+ *  shape in white on black to get a smooth, anti-aliased rounded-corner alpha
+ *  mask, so the icon has clean transparent corners instead of a hard square.
+ * ------------------------------------------------------------------------- */
+static void icon_badge(Canvas *ic, int sz)
+{
+    float s = sz*0.5f, cx = s, cy = s;
+    float m  = (float)sz * 0.045f;
+    float bs = s - m;                         /* badge half-extent           */
+    float rad = (float)sz * 0.28f;
+
+    Paint g = paint_linear(cx - bs, cy - bs, cx + bs, cy + bs, C_V500, C_MAGENTA);
+    cv_rrect_p(ic, cx - bs, cy - bs, bs*2.f, bs*2.f, rad, &g);
+    cv_glow(ic, cx - bs*0.4f, cy - bs*0.45f, bs*1.1f, HEX(0xFFFFFF), 0.10f);
+
+    float r = bs * 0.66f;
+    Path body; path_reset(&body);
+    path_move (&body, cx - r*0.62f, cy + r*0.10f);
+    path_line (&body, cx + r*0.66f, cy - r*0.60f);
+    path_line (&body, cx + r*0.02f, cy + r*0.66f);
+    path_line (&body, cx - r*0.10f, cy + r*0.12f);
+    path_close(&body);
+    cv_fill_col(ic, &body, HEX(0xFFFFFF));
+    Path fold; path_reset(&fold);
+    path_move (&fold, cx - r*0.10f, cy + r*0.12f);
+    path_line (&fold, cx + r*0.02f, cy + r*0.66f);
+    path_line (&fold, cx + r*0.66f, cy - r*0.60f);
+    path_close(&fold);
+    cv_fill_col(ic, &fold, col_alpha(C_V700, .32f));
+}
+
+static HICON make_app_icon(int sz)
+{
+    Canvas col, msk;
+    if (!cv_create(&col, sz, sz)) return NULL;
+    if (!cv_create(&msk, sz, sz)) { cv_destroy(&col); return NULL; }
+
+    /* colour pass on the brand purple, so any anti-aliased edge blends toward
+     * the badge rather than fringing against a key colour */
+    cv_clear(&col, C_V600);
+    icon_badge(&col, sz);
+
+    /* alpha pass: the same rounded-square shape, white on black */
+    cv_clear(&msk, HEX(0x000000));
+    {
+        float s = sz*0.5f, m = (float)sz*0.045f, bs = s - m, rad = (float)sz*0.28f;
+        cv_rrect(&msk, m, m, bs*2.f, bs*2.f, rad, HEX(0xFFFFFF));
+    }
+    cv_sync(&col); cv_sync(&msk);
+
+    /* a 32-bit top-down ARGB DIB, alpha taken from the mask's luminance */
+    BITMAPINFO bi;
+    memset(&bi, 0, sizeof bi);
+    bi.bmiHeader.biSize        = sizeof(BITMAPINFOHEADER);
+    bi.bmiHeader.biWidth       = sz;
+    bi.bmiHeader.biHeight      = -sz;
+    bi.bmiHeader.biPlanes      = 1;
+    bi.bmiHeader.biBitCount    = 32;
+    bi.bmiHeader.biCompression = BI_RGB;
+
+    void *bits = NULL;
+    HDC screen = GetDC(NULL);
+    HBITMAP colorBmp = CreateDIBSection(screen, &bi, DIB_RGB_COLORS, &bits, NULL, 0);
+    ReleaseDC(NULL, screen);
+    if (!colorBmp) { cv_destroy(&col); cv_destroy(&msk); return NULL; }
+
+    uint32_t *dst = (uint32_t *)bits;
+    for (int i = 0; i < sz*sz; i++) {
+        uint32_t c8 = col.px[i];              /* 0xFFrrggbb from the canvas   */
+        uint32_t a  = msk.px[i] & 0xFFu;       /* mask luminance -> alpha      */
+        /* premultiply so the corners are clean under the icon compositor */
+        uint32_t rr = (((c8 >> 16) & 0xFFu) * a) / 255u;
+        uint32_t gg = (((c8 >> 8)  & 0xFFu) * a) / 255u;
+        uint32_t bb = (( c8        & 0xFFu) * a) / 255u;
+        dst[i] = (a << 24) | (rr << 16) | (gg << 8) | bb;
+    }
+
+    /* a mono AND mask is still required; the alpha channel does the real work */
+    HBITMAP maskBmp = CreateBitmap(sz, sz, 1, 1, NULL);
+
+    ICONINFO ii;
+    memset(&ii, 0, sizeof ii);
+    ii.fIcon    = TRUE;
+    ii.hbmColor = colorBmp;
+    ii.hbmMask  = maskBmp;
+    HICON icon = CreateIconIndirect(&ii);
+
+    DeleteObject(colorBmp);
+    DeleteObject(maskBmp);
+    cv_destroy(&col);
+    cv_destroy(&msk);
+    return icon;
+}
+
 int WINAPI WinMain(HINSTANCE hInst, HINSTANCE prev, LPSTR cmd, int show)
 {
     (void)prev; (void)cmd;
     SetProcessDPIAware();
+
+    /*  Big for the taskbar and Alt-Tab, small for the title-bar corner.  */
+    HICON iconBig = make_app_icon(64);
+    HICON iconSm  = make_app_icon(32);
 
     WNDCLASSEX wc;
     memset(&wc, 0, sizeof wc);
@@ -1035,6 +1145,8 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE prev, LPSTR cmd, int show)
     wc.style         = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS | CS_OWNDC;
     wc.lpfnWndProc   = wndproc;
     wc.hInstance     = hInst;
+    wc.hIcon         = iconBig;
+    wc.hIconSm       = iconSm;
     wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
     wc.hbrBackground = NULL;
     wc.lpszClassName = "AURA_MRU";
@@ -1051,6 +1163,11 @@ int WINAPI WinMain(HINSTANCE hInst, HINSTANCE prev, LPSTR cmd, int show)
         "AURA  -  Airport Unified Resource Administration  |  MRU Plaisance",
         WS_OVERLAPPEDWINDOW, sx, sy, ww, wh, NULL, NULL, hInst, NULL);
     if (!g_hwnd) return 1;
+
+    /* the class icon is usually enough, but set it on the window too so the
+     * taskbar button and Alt-Tab both pick up the AURA mark immediately */
+    if (iconBig) SendMessage(g_hwnd, WM_SETICON, ICON_BIG,   (LPARAM)iconBig);
+    if (iconSm)  SendMessage(g_hwnd, WM_SETICON, ICON_SMALL, (LPARAM)iconSm);
 
     memset(&g_app, 0, sizeof g_app);
     tx_init();

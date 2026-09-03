@@ -36,6 +36,7 @@ typedef struct {
     int           verified;          /* left by an account with a booking   */
     int           helpful;
     int           ownReview;         /* written by the signed-in account    */
+    int           userSubmitted;     /* posted in the app (not a seed) -> saved */
 } Review;
 
 typedef struct {
@@ -55,6 +56,13 @@ int           rv_filter    (const ReviewBook *B, ReviewService s, int *out,
                             int max);
 const char   *rv_service_name(ReviewService s);
 const char   *rv_service_blurb(ReviewService s);
+
+/*  Persistence.  Only reviews posted in the app are written (the seeds live
+ *  in the source), so a passenger's own review survives closing the app and
+ *  a review posted by another account on the same machine shows up on reload.
+ *  The file is data/reviews.csv, which is git-ignored.                      */
+void          rv_save      (const ReviewBook *B, const char *path);
+int           rv_load      (ReviewBook *B, World *w, const char *path);
 
 /* --------------------------------------------------------- lost property -- */
 
