@@ -1,0 +1,60 @@
+name: Import AURA
+
+on:
+  push:
+    branches: [aura_update]
+    paths: [.aura-upload/ready]
+
+permissions:
+  contents: write
+
+jobs:
+  import:
+    if: github.repository == 'freeapikeys/SWEproject' && github.actor == 'freeapikeys'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Import the checked source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --no-checkout "https://github.com/$GITHUB_REPOSITORY.git" work
+          cd work
+          git checkout --detach "$GITHUB_SHA"
+          python3 - <<'PY'
+          import base64, hashlib, json, lzma, pathlib, re, subprocess
+          root = pathlib.Path('.aura-upload')
+          manifest = json.loads((root / 'manifest.json').read_text())
+          chunks = []
+          for item in manifest['chunks']:
+              name = item['name']
+              if not re.fullmatch(r'part[0-9]{3}\.txt', name):
+                  raise SystemExit('Invalid chunk name')
+              data = (root / name).read_bytes()
+              if hashlib.sha256(data).hexdigest() != item['sha256']:
+                  raise SystemExit('Chunk checksum mismatch')
+              chunks.append(data)
+          compressed = base64.b64decode(b''.join(chunks), validate=True)
+          if hashlib.sha256(compressed).hexdigest() != manifest['sha256']:
+              raise SystemExit('Payload checksum mismatch')
+          bundle = lzma.decompress(compressed, memlimit=536870912)
+          if hashlib.sha256(bundle).hexdigest() != manifest['bundle_sha256']:
+              raise SystemExit('Bundle checksum mismatch')
+          path = pathlib.Path('/tmp/aura.bundle')
+          path.write_bytes(bundle)
+          subprocess.run(['git', 'bundle', 'verify', str(path)], check=True)
+          subprocess.run(['git', 'fetch', str(path), 'refs/heads/aura_candidate'], check=True)
+          tree = subprocess.check_output(['git', 'rev-parse', 'FETCH_HEAD^{tree}'], text=True).strip()
+          if tree != manifest['tree'] or not re.fullmatch(r'[0-9a-f]{40}', tree):
+              raise SystemExit('Source tree mismatch')
+          pathlib.Path('/tmp/aura-tree').write_text(tree)
+          PY
+          git config user.name freeapikeys
+          git config user.email 219321938+freeapikeys@users.noreply.github.com
+          tree=$(cat /tmp/aura-tree)
+          commit=$(printf 'Add AURA apps and shared backend\n' | git commit-tree "$tree" -p "$GITHUB_SHA")
+          auth=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
+          git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $auth" push origin "$commit:refs/heads/aura_update"
+          printf 'Imported tree %s\nCommit %s\n' "$tree" "$commit"
