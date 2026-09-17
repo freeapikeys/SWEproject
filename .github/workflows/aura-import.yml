@@ -26,7 +26,10 @@ jobs:
           python3 - <<'PY'
           import base64, hashlib, json, lzma, pathlib, re, subprocess
           root = pathlib.Path('.aura-upload')
-          manifest = json.loads((root / 'manifest.json').read_text())
+          manifest_bytes = (root / 'manifest.json').read_bytes()
+          if hashlib.sha256(manifest_bytes).hexdigest() != 'dec78b636819d919ba58dd1b761452494487624b8464c1d0ac3469cb60d0b10b':
+              raise SystemExit('Manifest checksum mismatch')
+          manifest = json.loads(manifest_bytes)
           chunks = []
           for item in manifest['chunks']:
               name = item['name']
@@ -39,16 +42,48 @@ jobs:
           compressed = base64.b64decode(b''.join(chunks), validate=True)
           if hashlib.sha256(compressed).hexdigest() != manifest['sha256']:
               raise SystemExit('Payload checksum mismatch')
-          bundle = lzma.decompress(compressed, memlimit=536870912)
-          if hashlib.sha256(bundle).hexdigest() != manifest['bundle_sha256']:
-              raise SystemExit('Bundle checksum mismatch')
-          path = pathlib.Path('/tmp/aura.bundle')
-          path.write_bytes(bundle)
-          subprocess.run(['git', 'bundle', 'verify', str(path)], check=True)
-          subprocess.run(['git', 'fetch', str(path), 'refs/heads/aura_candidate'], check=True)
-          tree = subprocess.check_output(['git', 'rev-parse', 'FETCH_HEAD^{tree}'], text=True).strip()
-          if tree != manifest['tree'] or not re.fullmatch(r'[0-9a-f]{40}', tree):
-              raise SystemExit('Source tree mismatch')
+          raw = lzma.decompress(compressed, memlimit=536870912)
+          if hashlib.sha256(raw).hexdigest() != manifest['recipe_sha256']:
+              raise SystemExit('Source checksum mismatch')
+          recipe = json.loads(raw)
+          if recipe['version'] != 1 or recipe['base'] != '3ccad3f12909ceb779c946917ae18c3f83a32ef0':
+              raise SystemExit('Unexpected source base')
+          subprocess.run(['git', 'merge-base', '--is-ancestor', recipe['base'], 'HEAD'], check=True)
+          def original(path):
+              return subprocess.check_output(['git', 'show', recipe['base'] + ':' + path]).decode('utf-8')
+          for item in recipe['files']:
+              relative = pathlib.PurePosixPath(item['path'])
+              if relative.is_absolute() or '..' in relative.parts or '.git' in relative.parts:
+                  raise SystemExit('Invalid destination')
+              if relative.parts[0] != 'AURA-current' and str(relative) not in ('README.md', 'aura_continue.py'):
+                  raise SystemExit('Unexpected destination')
+              if 'copy' in item:
+                  text = original(item['copy'])
+              elif 'chunks' in item:
+                  lines = original(item['base']).splitlines(keepends=True)
+                  pieces = []
+                  for chunk in item['chunks']:
+                      if isinstance(chunk, str):
+                          pieces.append(chunk)
+                      else:
+                          start, end = chunk
+                          if not 0 <= start <= end <= len(lines):
+                              raise SystemExit('Invalid source range')
+                          pieces.append(''.join(lines[start:end]))
+                  text = ''.join(pieces)
+              else:
+                  text = item['text']
+              data = text.encode('utf-8')
+              if hashlib.sha256(data).hexdigest() != item['sha256']:
+                  raise SystemExit('File checksum mismatch: ' + str(relative))
+              path = pathlib.Path(relative)
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(data)
+          subprocess.run(['git', 'rm', '-r', '.aura-upload', '.github/workflows/aura-import.yml'], check=True)
+          subprocess.run(['git', 'add', '--', 'AURA-current', 'README.md', 'aura_continue.py'], check=True)
+          tree = subprocess.check_output(['git', 'write-tree'], text=True).strip()
+          if tree != recipe['tree'] or tree != manifest['tree']:
+              raise SystemExit('Final source tree mismatch')
           pathlib.Path('/tmp/aura-tree').write_text(tree)
           PY
           git config user.name freeapikeys
